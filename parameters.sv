@@ -132,32 +132,32 @@ typedef enum logic [9:0] {
 
 //structure for double operand instructions type 1
 typedef struct packed {
-	opcode_t_0 	opcode;							//byte or word type + opcode
-	logic [2:0] mode_src;						//src addr mode
-	logic [2:0] src;							//src register
-	logic [2:0] mode_dest;						//dest addr mode
-	logic [2:0] dest;							//dest register
+	opcode_t_0 	opcode;		//byte or word type + opcode
+	logic [2:0] mode_src;	//src addr mode
+	logic [2:0] src;		//src register
+	logic [2:0] mode_dest;	//dest addr mode
+	logic [2:0] dest;		//dest register
 }instruction_d_1_t;
 
 //structure for double operand instructions type 2
 typedef struct packed {
-	opcode_t_1 	opcode;							//hard coded bits + opcode
-	logic [2:0] register;						//register
-	logic [2:0] mode;							//mode
-	logic [2:0] src_dest;						//src/destination
+	opcode_t_1 	opcode;		//hard coded bits + opcode
+	logic [2:0] register;	//register
+	logic [2:0] mode;		//mode
+	logic [2:0] src_dest;	//src/destination
 }instruction_d_2_t;
 
 //structure for single operand instructions
 typedef struct packed {
-	opcode_t_2 	opcode;							//byte or word type + hard coded bits + opcode
-	logic [2:0] mode_dest;						//dest addr mode
-	logic [2:0] dest;							//dest register
+	opcode_t_2 	opcode;		//byte or word type + hard coded bits + opcode
+	logic [2:0] mode_dest;	//dest addr mode
+	logic [2:0] dest;		//dest register
 }instruction_s_t;
 
 //structure for conditional branch instructions
 typedef struct packed {
-	opcode_t_3 	opcode;							//hard coded bits + opcode
-	logic [5:0] offset;							//operand
+	opcode_t_3 	opcode;	//hard coded bits + opcode
+	logic [5:0] offset;	//operand
 }instruction_c_t;
 
 union packed {
@@ -167,8 +167,8 @@ union packed {
 	instruction_c_t 	instruction_c;		//conditional branch instructions
 }instruction;
 
-bool halt;										//halts the pipeline when branch instruction occurs
-bool branch_taken;								//indicates if branch is taken
+bool halt;									//halts the pipeline when branch instruction occurs
+bool branch_taken;							//indicates if branch is taken
 
 //instruction type
 typedef enum logic [1:0] {
