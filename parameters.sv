@@ -18,6 +18,10 @@ package parameters;
 
 `include "pdp_11_const.vh"
 
+parameter HARD_CODED_SINGLE_OPERAND_BITS = 4'b0001;
+parameter HARD_CODED_DOUBLE_OPERAND_BITS = 4'b0000;
+parameter MULTIPLY_INSTRUCTIONS = 4'b0111;
+
 //struct to store memory element of our processor
 struct {
 	//FIXME should 15 come from const ? 
@@ -37,17 +41,36 @@ typedef struct packed
 	logic  		carry_bit; 
 }processor_status_word_t;
 
+
 //CPU registers
 struct {
 	//TODO can we have register[7:0]
 	//and make stack_pointer register[6] point to same thing?
 	//and make program_counter register[7] point to same thing?
-	logic [15:0] register[5:0];						//general purpose register (R0-R5)
+	logic [15:0] register[7:0];						//general purpose register (R0-R5)
 	logic [15:0] stack_pointer;						//R6 = stack pointer
-	logic [15:0] program_counter;					//R7 = program counter
+	logic [15:0] program_counter = '0;					//R7 = program counter
 	processor_status_word_t processor_status_word;	//I = Interrupt, T = Trap, N = negative value, Z = Zero, V = overflow, C = carry
 	logic [15:0] fp_status_reg;						//floating point status register
 }cpu_register;
+
+alias register[0] = R0;
+alias register[1] = R1;
+alias register[2] = R2;
+alias register[3] = R3;
+alias register[4] = R4;
+alias register[5] = R5;
+alias register[6] = R6;
+alias register[7] = R7;
+union {
+	logic [15:0] stack_pointer;
+	logic [15:0] register[6];
+}reg_sp;
+
+union {
+	logic [15:0] program_counter;
+	logic [15:0] register[7];
+}reg_pc;
 
 //all 4 bit opcodes (1st bit(MSB) for byte/Word rest of 3 bits for operation)
 //takes care of word as well as byte Instructions
@@ -86,42 +109,41 @@ typedef enum logic [6:0] {
 //8:5 hard coded
 //4:0 actual opcode
 typedef enum logic [9:0] {
-						SWAB = 10'o0003 	//Swap bytes, rotate 8 bits
-						,JSR = 10'o004x 	//STICKEY, check whether x is correct, Jump to subroutine 
-						,EMT = 10'o104x 	//STICKEY, check whether x is correct, Emulator Trap
-						,CLR = 10'o0050		//Clear : dest = 0
-						,CLRB = 10'o1050	//
-						,COM = 10'o0051		//Complement : dest =~ dest
-						,COMB = 10'o1051	//
-						,INC = 10'o0052		//Increment : dest += 1
-						,INCB = 10'o1052 	//
-						,DEC = 10'o0053 	//Decrement : dest -= 1
-						,DECB = 10'o1053	//
-						,NEG = 10'o0054		//Negate : dest = ~dest
-						,NEGB = 10'o1054	//
-						,ADC = 10'o0055		//Add carry : dest += C(from carry flag)
-						,ADCB = 10'o1055	//
-						,SBC = 10'o0056		//Subtract carry : dest += C(from carry flag)
-						,SBCB = 10'o1056	//
-						,TST = 10'o0057		//
-						,TSTB = 10'o1057	//
-						,ROR = 10'o0060		//Rotate right 1 bit
-						,RORB = 10'o1060	//
-						,ROL = 10'o0061		//Rotate left 1 bit
-						,ROLB = 10'o1061	//
-						,ASR = 10'o0062		//Shift right : dest >> 1
-						,ASRB = 10'o1062	//
-						,ASL = 10'o0063		//Shift left : dest << 1
-						,ASLB = 10'o1063	//
-						,MARK = 10'o0064	//
-						,MTPS = 10'o1064	//
-						,MFPI = 10'o0065	//
-						,MFPD = 10'o1065	//
-						,MTPI = 10'o0066	//
-						,MTPD = 10'o1066	//
-						,SXT = 10'o0067		//
-						,MFPS = 10'o1067	//
-
+	SWAB = 10'o0003 	//Swap bytes, rotate 8 bits
+	,JSR = 10'o004x 	//STICKEY, check whether x is correct, Jump to subroutine 
+	,EMT = 10'o104x 	//STICKEY, check whether x is correct, Emulator Trap
+	,CLR = 10'o0050		//Clear : dest = 0
+	,CLRB = 10'o1050	//
+	,COM = 10'o0051		//Complement : dest =~ dest
+	,COMB = 10'o1051	//
+	,INC = 10'o0052		//Increment : dest += 1
+	,INCB = 10'o1052 	//
+	,DEC = 10'o0053 	//Decrement : dest -= 1
+	,DECB = 10'o1053	//
+	,NEG = 10'o0054		//Negate : dest = ~dest
+	,NEGB = 10'o1054	//
+	,ADC = 10'o0055		//Add carry : dest += C(from carry flag)
+	,ADCB = 10'o1055	//
+	,SBC = 10'o0056		//Subtract carry : dest += C(from carry flag)
+	,SBCB = 10'o1056	//
+	,TST = 10'o0057		//
+	,TSTB = 10'o1057	//
+	,ROR = 10'o0060		//Rotate right 1 bit
+	,RORB = 10'o1060	//
+	,ROL = 10'o0061		//Rotate left 1 bit
+	,ROLB = 10'o1061	//
+	,ASR = 10'o0062		//Shift right : dest >> 1
+	,ASRB = 10'o1062	//
+	,ASL = 10'o0063		//Shift left : dest << 1
+	,ASLB = 10'o1063	//
+	,MARK = 10'o0064	//
+	,MTPS = 10'o1064	//
+	,MFPI = 10'o0065	//
+	,MFPD = 10'o1065	//
+	,MTPI = 10'o0066	//
+	,MTPD = 10'o1066	//
+	,SXT = 10'o0067		//
+	,MFPS = 10'o1067	//
 }opcode_t_2;
 
 //all 10 bit, brnaching opcodes
@@ -142,7 +164,7 @@ typedef struct packed {
 //structure for double operand instructions type 2
 typedef struct packed {
 	opcode_t_1 	opcode;		//hard coded bits + opcode
-	logic [2:0] register;	//register
+	logic [2:0] reg_op;	//register
 	logic [2:0] mode;		//mode
 	logic [2:0] src_dest;	//src/destination
 }instruction_d_2_t;
@@ -165,10 +187,12 @@ union packed {
 	instruction_d_2_t 	instruction_d_2;	//double operand instruction type 2
 	instruction_s_t 	instruction_s;		//single operand instruction
 	instruction_c_t 	instruction_c;		//conditional branch instructions
+	logic [15:0]		instruction_x;
 }instruction;
 
-bool halt;									//halts the pipeline when branch instruction occurs
-bool branch_taken;							//indicates if branch is taken
+typedef enum {TRUE, FALSE} bool_t;
+bool_t halt;									//halts the pipeline when branch instruction occurs
+bool_t branch_taken;							//indicates if branch is taken
 
 //instruction type
 typedef enum logic [1:0] {
@@ -176,6 +200,24 @@ typedef enum logic [1:0] {
 	,DOUBLE_OPERAND_2
 	,SINGLE_OPERAND
 	,CONDITIONAL_BRANCH
-}instruction_type;
+}instruction_type_t;
 
+
+//states for FSM
+typedef enum {S0, S1, S2, S3} state_t;
+
+function operand_get(input mode, reg_addr);
+	unique case (mode)	//decode addressing mode
+		0:
+			return cpu_register.register[instruction.instruction_s.dest];		//register addressing mode
+		// 1:														//calculate register for all addresses.
+		// 2:
+		// 3:
+		// 4:
+		// 5:
+		// 6:
+		// 7:
+		default: return 0;
+	endcase // instruction.instruction_s.mode_dest
+endfunction : operand_get
 endpackage
