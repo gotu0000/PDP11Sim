@@ -49,19 +49,11 @@ struct {
 	//and make program_counter register[7] point to same thing?
 	logic [15:0] register[7:0];						//general purpose register (R0-R5)
 	logic [15:0] stack_pointer;						//R6 = stack pointer
-	logic [15:0] program_counter = '0;					//R7 = program counter
+	logic [15:0] program_counter = 16'b0;					//R7 = program counter
 	processor_status_word_t processor_status_word;	//I = Interrupt, T = Trap, N = negative value, Z = Zero, V = overflow, C = carry
 	logic [15:0] fp_status_reg;						//floating point status register
 }cpu_register;
 
-alias register[0] = R0;
-alias register[1] = R1;
-alias register[2] = R2;
-alias register[3] = R3;
-alias register[4] = R4;
-alias register[5] = R5;
-alias register[6] = R6;
-alias register[7] = R7;
 union {
 	logic [15:0] stack_pointer;
 	logic [15:0] register[6];

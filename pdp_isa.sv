@@ -21,6 +21,7 @@ struct {
 	logic [15:0] alu_out [4:1];
 	logic [15:0] branch_addr;
 	instruction_type_t instruction_type [4:1];
+	logic [15:0] next_pc;
 }buffer;
 
 
@@ -34,14 +35,15 @@ begin
 //	begin
 	if(p_state == S0)
 	begin
-		//next_pc <= next_pc + 1;
-		cpu_register.program_counter <= cpu_register.program_counter + 1'b1;		//updated program counter
-		instruction.instruction_x <= memory.flash[cpu_register.program_counter];
-		buffer.instruction[1] <= memory.flash[cpu_register.program_counter];
+		buffer.next_pc <= cpu_register.program_counter;
+		cpu_register.program_counter <= cpu_register.program_counter + 1'd1;		//updated program counter
+		instruction.instruction_x <= memory.flash[buffer.next_pc];
+		buffer.instruction[1] <= memory.flash[buffer.next_pc];
 		//if_buffer <= program_counter;
 		//instruction.instruction_d <= program_counter;
 	end
 	else begin
+		buffer.next_pc <= buffer.next_pc;
 		cpu_register.program_counter <= cpu_register.program_counter;
 		instruction.instruction_x <= instruction.instruction_x;
 		buffer.instruction[1] <= buffer.instruction[1];
@@ -112,42 +114,41 @@ begin
 		if (buffer.instruction_type[2] == SINGLE_OPERAND)
 		begin
 			case (instruction.instruction_s.opcode)
-				SWAB:
-				buffer.alu_out[3] <= 'b10101010;
-				// JSR:
-				// EMT:
-				// CLR:
-				// CLRB:
-				// COM:
-				// COMB:
-				// INC:
-				// INCB:
-				// DEC:
-				// DECB:
-				// NEG:
-				// NEGB:
-				// ADC:
-				// ADCB:
-				// SBC:
-				// SBCB:
-				// TST:
-				// TSTB:
-				// ROR:
-				// RORB:
-				// ROL:
-				// ROLB:
-				// ASR:
-				// ASRB:
-				// ASL:
-				// ASLB:
-				// MARK:
-				// MTPS:
-				// MFPI:
-				// MFPD:
-				// MTPI:
-				// MTPD:
-				// SXT:
-				// MFPS:
+				SWAB: buffer.alu_out[3] <= 'b10101010;
+				JSR: buffer.alu_out[3] <= 'b0;
+				EMT: buffer.alu_out[3] <= 'b0;
+				CLR: buffer.alu_out[3] <= 'b0;
+				CLRB: buffer.alu_out[3] <= 'b0;
+				COM: buffer.alu_out[3] <= 'b0;
+				COMB: buffer.alu_out[3] <= 'b0;
+				INC: buffer.alu_out[3] <= 'b0;
+				INCB: buffer.alu_out[3] <= 'b0;
+				DEC: buffer.alu_out[3] <= 'b0;
+				DECB: buffer.alu_out[3] <= 'b0;
+				NEG: buffer.alu_out[3] <= 'b0;
+				NEGB: buffer.alu_out[3] <= 'b0;
+				ADC: buffer.alu_out[3] <= 'b0;
+				ADCB: buffer.alu_out[3] <= 'b0;
+				SBC: buffer.alu_out[3] <= 'b0;
+				SBCB: buffer.alu_out[3] <= 'b0;
+				TST: buffer.alu_out[3] <= 'b0;
+				TSTB: buffer.alu_out[3] <= 'b0;
+				ROR: buffer.alu_out[3] <= 'b0;
+				RORB: buffer.alu_out[3] <= 'b0;
+				ROL: buffer.alu_out[3] <= 'b0;
+				ROLB: buffer.alu_out[3] <= 'b0;
+				ASR: buffer.alu_out[3] <= 'b0;
+				ASRB: buffer.alu_out[3] <= 'b0;
+				ASL: buffer.alu_out[3] <= 'b0;
+				ASLB: buffer.alu_out[3] <= 'b0;
+				MARK: buffer.alu_out[3] <= 'b0;
+				MTPS: buffer.alu_out[3] <= 'b0;
+				MFPI: buffer.alu_out[3] <= 'b0;
+				MFPD: buffer.alu_out[3] <= 'b0;
+				MTPI: buffer.alu_out[3] <= 'b0;
+				MTPD: buffer.alu_out[3] <= 'b0;
+				SXT: buffer.alu_out[3] <= 'b0;
+				MFPS: buffer.alu_out[3] <= 'b0;
 				default: buffer.alu_out[3] <= 16'b0;
 			endcase // instruction.instruction_s.operand
 		end
@@ -221,7 +222,7 @@ begin
 	p_state <= n_state;
 end
 
-always_ff @ (posedge clock)
+always_comb
 begin
 	case (p_state)
 		S0: n_state <= S1;
