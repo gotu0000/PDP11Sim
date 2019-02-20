@@ -196,13 +196,14 @@ typedef enum logic [1:0] {
 
 
 //states for FSM
-typedef enum {S0, S1, S2, S3} state_t;
+typedef enum {S4, S1, S2, S3} state_t;
 
-function operand_get(input mode, reg_addr);
-	unique case (mode)	//decode addressing mode
-		0:
-			return cpu_register.register[instruction.instruction_s.dest];		//register addressing mode
-		// 1:														//calculate register for all addresses.
+function automatic logic [15:0] operand_get(logic [2:0] mode_dest, logic [2:0] dest);
+	unique case (mode_dest)	//decode addressing mode
+		'b000:
+			return cpu_register.register[dest];		//register addressing mode
+		'b001:
+			return	memory.data[cpu_register.register[dest]];													//calculate register for all addresses.
 		// 2:
 		// 3:
 		// 4:
