@@ -4,12 +4,15 @@ module test();
 logic clock;
 pdp_isa ins (.clock(clock));
 
-parameter R1 = 3'b000;
-
 // initial begin
 // 	//load the instructions into flash
 // 	$readmemh("instructions_file.ascii",memory.flash);
 // end
+
+initial begin
+	cpu_register.register[0] = 'd5;
+	cpu_register.register[1] = 'd1;
+end
 
 // initial begin
 // //instruction.instruction_x = 'b0000100011000000;					//give the opcode of any instruction you want to test.
@@ -27,8 +30,8 @@ parameter R1 = 3'b000;
 
 //give instructions here
 initial begin
-memory.flash[0] = 16'o017654;
-memory.flash[1] = 16'o117654;
+memory.flash[0] = 16'o060001;
+memory.flash[1] = 16'o060000;
 memory.flash[2] = 16'o027654;
 memory.flash[3] = 16'o127654;
 memory.flash[4] = 16'o037654;
@@ -68,27 +71,28 @@ initial
 begin
 
 end
-always @ (ins.p_state == S0)
+always @ (ins.p_state)
 begin
 	//$display($time,"	state : %s",ins.p_state);
-	case (ins.buffer.instruction_type[2])
-		SINGLE_OPERAND:
-		//$display($time,"	%s	%d	%b    %s R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_s.opcode, instruction.instruction_s.dest);
-		$display("%s R%d", instruction.instruction_s.opcode, instruction.instruction_s.dest);
-		DOUBLE_OPERAND_1:
-		//$display($time,"	%s	%d	%b    %s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_1.opcode,instruction.instruction_d_1.dest, instruction.instruction_d_1.src);
-		$display("%s R%d, R%d", instruction.instruction_d_1.opcode,instruction.instruction_d_1.dest, instruction.instruction_d_1.src);
-		DOUBLE_OPERAND_2:
-		//$display($time,"	%s  %d	%b 	%s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
-		$display("%s R%d,R%d", instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
-		CONDITIONAL_BRANCH:
-		//$display($time,"	%s  %d	%b 	%s %d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_c.opcode,instruction.instruction_c.offset);
-		$display("%s %o", instruction.instruction_c.opcode,instruction.instruction_c.offset);
-	endcase
+	if(ins.p_state == S1)
+	begin
+		case (ins.buffer.instruction_type[2])
+			SINGLE_OPERAND:
+			//$display($time,"	%s	%d	%b    %s R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_s.opcode, instruction.instruction_s.dest);
+			$display(,"%s R%d",instruction.instruction_s.opcode, instruction.instruction_s.dest);
+			DOUBLE_OPERAND_1:
+			//$display($time,"	%s	%d	%b    %s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_1.opcode,instruction.instruction_d_1.dest, instruction.instruction_d_1.src);
+			$display("%s R%d, R%d",instruction.instruction_d_1.opcode,instruction.instruction_d_1.dest, instruction.instruction_d_1.src);
+			DOUBLE_OPERAND_2:
+			//$display($time,"	%s  %d	%b 	%s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
+			$display("%s R%d,R%d",instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
+			CONDITIONAL_BRANCH:
+			//$display($time,"	%s  %d	%b 	%s %d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_c.opcode,instruction.instruction_c.offset);
+			$display("%s %o",instruction.instruction_c.opcode,instruction.instruction_c.offset);
+		endcase
+	end
+	else if (ins.p_state == S2)
+			$display("ALU result = %d ", ins.buffer.alu_out[3]);
 end
 
-always @ (ins.p_state == S1)
-begin
-	$display("ALU result = %d ",ins.buffer.alu_out[3]);
-end
 endmodule
