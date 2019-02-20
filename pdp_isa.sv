@@ -26,14 +26,14 @@ struct {
 
 
 //
-state_t p_state, n_state = S0;
+state_t p_state, n_state = S1;
 
 //instruction fetch
 always_ff @ (posedge clock)
 begin
 //	if (halt == FALSE && branch_taken == FALSE)
 //	begin
-	if(p_state == S0)
+	if(p_state == S1)
 	begin
 		buffer.next_pc <= cpu_register.program_counter;
 		cpu_register.program_counter <= cpu_register.program_counter + 1'd1;		//updated program counter
@@ -58,7 +58,7 @@ always_ff @ (posedge clock)
 begin
 	buffer.instruction[2] <= buffer.instruction[1];
 	//determine type of instruction
-	if (p_state == S1)
+	if (p_state == S2)
 	begin
 		if (instruction.instruction_x[14:11] == HARD_CODED_SINGLE_OPERAND_BITS) begin						//implies single operand instruction
 			//$display("single instruction : %b",buffer.instruction[1]);
@@ -82,6 +82,7 @@ begin
 		end
 		else if (buffer.instruction_type[2] == DOUBLE_OPERAND_1)
 		begin
+			//for add
 			buffer.source[2]  <= operand_get (instruction.instruction_d_1.mode_src,instruction.instruction_d_1.src);
 			buffer.destination [2] <= operand_get (instruction.instruction_d_1.mode_dest,instruction.instruction_d_1.dest);
 		end
@@ -178,7 +179,7 @@ begin
 					// BICB:
 					// BIS:
 					// BISB:
-					// ADD:
+					ADD: buffer.alu_out[3] <= buffer.source[2] + buffer.destination[2];
 					// SUB:
 				//endcase
 			end
@@ -204,7 +205,7 @@ begin
 	//buffer.source[4] <= buffer.source[3];
 	//buffer.destination[4] <= buffer.destination[3];
 	//buffer.alu_out[4] <= buffer.alu_out[3];	
-	if(p_state == S3)
+	if(p_state == S4)
 	begin
 		if (buffer.instruction_type[3] == SINGLE_OPERAND && instruction.instruction_s.mode_dest != 1)			//that is not a register address instruction
 			memory.data[buffer.destination[3]] <= buffer.alu_out[3]; //ALU result
@@ -225,11 +226,11 @@ end
 always_comb
 begin
 	case (p_state)
-		S0: n_state <= S1;
 		S1: n_state <= S2;
 		S2: n_state <= S3;
-		S3: n_state <= S0;
-		default : n_state <= S0;
+		S3: n_state <= S4;
+		S4: n_state <= S1;
+		default : n_state <= S1;
 	endcase // p_state
 end
 
