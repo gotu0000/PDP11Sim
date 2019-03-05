@@ -25,9 +25,10 @@ parameter MULTIPLY_INSTRUCTIONS = 4'b0111;
 //struct to store memory element of our processor
 struct {
 	//FIXME should 15 come from const ? 
-	logic [15:0] flash 	[`FLASH_MEMORY_SIZE - 1 : 0];	//flash memory for 16-bit instructions
+	logic [7:0] flash 	[`FLASH_MEMORY_SIZE - 1 : 0];	//flash memory for 16-bit instructions
 	logic [15:0] data 	[`DATA_MEMORY_SIZE  - 1 : 0];	//data memory
-}memory;
+}memory;												//32 K words memory i.e. 64 KB
+
 
 //status word register
 typedef struct packed 

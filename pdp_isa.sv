@@ -24,9 +24,11 @@ struct {
 	logic [15:0] next_pc;
 }buffer;
 
-
+logic [15:0] PC1 = 'b0, PC2 = 'b0; //for adding PC offset and relative PC
 //
 state_t p_state, n_state = S1;
+
+//combination logic block for relative PC
 
 //instruction fetch
 always_ff @ (posedge clock)
@@ -35,12 +37,24 @@ begin
 //	begin
 	if(p_state == S1)
 	begin
-		buffer.next_pc <= cpu_register.program_counter;
-		cpu_register.program_counter <= cpu_register.program_counter + 1'd1;		//updated program counter
-		instruction.instruction_x <= memory.flash[buffer.next_pc];
-		buffer.instruction[1] <= memory.flash[buffer.next_pc];
+		if (cpu_register.program_counter == 1'b0)
+		begin
+			buffer.next_pc <= cpu_register.program_counter + PC1;;
+			$display("PC = %d",cpu_register.program_counter);
+			cpu_register.program_counter <= cpu_register.program_counter + PC1;		//updated program counter
+			instruction.instruction_x <= memory.flash[buffer.next_pc];
+			buffer.instruction[1] <= memory.flash[buffer.next_pc];
 		//if_buffer <= program_counter;
 		//instruction.instruction_d <= program_counter;
+		end
+		else
+		begin
+			buffer.next_pc <= cpu_register.program_counter;
+			$display("PC = %d",cpu_register.program_counter);
+			cpu_register.program_counter <= cpu_register.program_counter + 2'd2 + PC2;		//updated program counter
+			instruction.instruction_x <= {memory.flash[buffer.next_pc], memory.flash[buffer.next_pc+1'b1]};
+			buffer.instruction[1] <= memory.flash[buffer.next_pc];
+		end
 	end
 	else begin
 		buffer.next_pc <= buffer.next_pc;
@@ -79,12 +93,32 @@ begin
 		begin
 			//call function to calculate the operand
 			buffer.destination[2] <= operand_get(instruction.instruction_s.mode_dest,instruction.instruction_s.dest);
+			if (buffer.destination[2] == 'd7)
+			begin
+				PC2 = 1'd2;
+			end
+			else 
+			begin
+				PC2 = 1'b0;
+			end
 		end
 		else if (buffer.instruction_type[2] == DOUBLE_OPERAND_1)
 		begin
 			//for add
 			buffer.source[2]  <= operand_get (instruction.instruction_d_1.mode_src,instruction.instruction_d_1.src);
 			buffer.destination [2] <= operand_get (instruction.instruction_d_1.mode_dest,instruction.instruction_d_1.dest);
+			if (buffer.source[2] == 'd7 & buffer.destination[2] == 'd7)
+			begin
+				PC2 = 'd2;
+			end
+			if (buffer.source[2] == 'd7 & buffer.destination[2] == 'd7)
+			begin
+				PC2 = 'd4;
+			end
+			if (buffer.source[2] != 'd7 & buffer.destination[2] != 7)
+			begin
+				PC2 = 'b0;
+			end
 		end
 		else if (buffer.instruction_type[2] == DOUBLE_OPERAND_2)
 		begin
@@ -115,43 +149,200 @@ begin
 		if (buffer.instruction_type[2] == SINGLE_OPERAND)
 		begin
 			case (instruction.instruction_s.opcode)
-				SWAB: buffer.alu_out[3] <= 'b10101010;
+				//swap bytes
+				SWAB:
+				begin
+					buffer.alu_out[3] <= {buffer.source[3][7:0],buffer.source[3][15:8]};
+				end
+
 				JSR: buffer.alu_out[3] <= 'b0;
+
 				EMT: buffer.alu_out[3] <= 'b0;
-				CLR: buffer.alu_out[3] <= 'b0;
-				CLRB: buffer.alu_out[3] <= 'b0;
-				COM: buffer.alu_out[3] <= 'b0;
-				COMB: buffer.alu_out[3] <= 'b0;
-				INC: buffer.alu_out[3] <= 'b0;
-				INCB: buffer.alu_out[3] <= 'b0;
-				DEC: buffer.alu_out[3] <= 'b0;
-				DECB: buffer.alu_out[3] <= 'b0;
-				NEG: buffer.alu_out[3] <= 'b0;
-				NEGB: buffer.alu_out[3] <= 'b0;
-				ADC: buffer.alu_out[3] <= 'b0;
-				ADCB: buffer.alu_out[3] <= 'b0;
-				SBC: buffer.alu_out[3] <= 'b0;
-				SBCB: buffer.alu_out[3] <= 'b0;
-				TST: buffer.alu_out[3] <= 'b0;
-				TSTB: buffer.alu_out[3] <= 'b0;
-				ROR: buffer.alu_out[3] <= 'b0;
-				RORB: buffer.alu_out[3] <= 'b0;
-				ROL: buffer.alu_out[3] <= 'b0;
-				ROLB: buffer.alu_out[3] <= 'b0;
-				ASR: buffer.alu_out[3] <= 'b0;
-				ASRB: buffer.alu_out[3] <= 'b0;
-				ASL: buffer.alu_out[3] <= 'b0;
-				ASLB: buffer.alu_out[3] <= 'b0;
+
+				CLR: 
+				begin
+					buffer.alu_out[3] <= 16'b0;
+					//STICKY do i need to set the zero flag
+					cpu_register.processor_status_word.zero_flag <= 1'b1;
+				end
+
+				CLRB: 
+				begin
+					buffer.alu_out[3][7:0] <= 8'b0;
+					cpu_register.processor_status_word.zero_flag <= 1'b1;
+				end
+
+				//complement
+				//bit wise
+				//FIXME do i need to set the zero flag
+				COM: 
+				begin
+					buffer.alu_out[3] <= ~buffer.source[3];
+					if(buffer.alu_out[3] == 16'b0)
+					begin
+						cpu_register.processor_status_word.zero_flag <= 1'b1;
+					end
+				end
+
+				//complement, bit wise
+				COMB:
+				begin
+					buffer.alu_out[3][7:0] <= ~buffer.source[3][7:0];
+					if(buffer.alu_out[3][7:0] == 8'b0)
+					begin
+						cpu_register.processor_status_word.zero_flag <= 1'b1;
+					end
+				end
+
+				INC: 
+				begin
+					{cpu_register.processor_status_word.overflow_flag
+					,buffer.alu_out[3]} <= buffer.source[3] + 1'b1;
+				end
+
+				INCB: 
+				begin
+					{cpu_register.processor_status_word.overflow_flag
+					,buffer.alu_out[3][7:0]} <= buffer.source[3][7:0] + 1'b1;
+				end
+
+				DEC: 
+				begin
+					buffer.alu_out[3] <= buffer.source[3] - 1'b1;
+					//FIXME should i check for overflow flag
+					//and the zero flag
+				end
+
+				DECB:
+				begin
+					buffer.alu_out[3][7:0] <= buffer.source[3][7:0] - 1'b1;
+					//FIXME should i check for overflow flag
+					//and the zero flag
+				end
+
+				NEG:
+				begin
+					buffer.alu_out[3] <= ~buffer.source[3];
+				end
+
+				NEGB:
+				begin
+					buffer.alu_out[3][7:0] <= ~buffer.source[3][7:0];
+				end
+
+				ADC:
+				begin
+					{cpu_register.processor_status_word.overflow_flag
+					,buffer.alu_out[3]} <= buffer.source[3] 
+					 			+ cpu_register.processor_status_word.carry_bit;
+				end
+
+				ADCB:
+				begin
+					{cpu_register.processor_status_word.overflow_flag
+					,buffer.alu_out[3][7:0]} <= buffer.source[3][7:0] 
+					 			+ cpu_register.processor_status_word.carry_bit;
+				end
+
+				SBC:
+				begin
+					buffer.alu_out[3] <= buffer.source[3] 
+					 			- cpu_register.processor_status_word.carry_bit;
+				end
+
+				SBCB:
+				begin
+					buffer.alu_out[3][7:0] <= buffer.source[3][7:0] 
+					 			- cpu_register.processor_status_word.carry_bit;
+				end
+
+				TST:
+				begin 
+					buffer.alu_out[3] <= buffer.source[3];
+					if(buffer.alu_out[3] == 16'b0)
+					begin
+						cpu_register.processor_status_word.zero_flag <= 1'b1;
+					end
+				end
+
+				TSTB:
+				begin 
+					buffer.alu_out[3][7:0] <= buffer.source[3][7:0];
+					if(buffer.alu_out[3][7:0] == 8'b0)
+					begin
+						cpu_register.processor_status_word.zero_flag <= 1'b1;
+					end
+				end
+
+				ROR:
+				begin
+					buffer.alu_out[3] <= {buffer.source[0],buffer.source[3][15:1]};
+				end
+
+				RORB:
+				begin
+					buffer.alu_out[3][7:0] <= {buffer.source[0],buffer.source[3][7:1]};
+				end
+
+				ROL:
+				begin
+					buffer.alu_out[3] <= {buffer.source[3][14:0],buffer.source[3][15]};
+				end
+				 
+				ROLB: 
+				begin
+					buffer.alu_out[3] <= {buffer.source[3][6:0],buffer.source[3][7]};
+				end
+
+				ASR:
+				begin
+					buffer.alu_out[3] <= {1'b0,buffer.source[3][15:1]};
+				end
+
+				ASRB:
+				begin
+					buffer.alu_out[3][7:0] <= {1'b0,buffer.source[3][7:1]};
+				end
+
+				ASL:
+				begin
+					buffer.alu_out[3] <= {buffer.source[3][14:0],1'b0};
+				end
+
+				ASLB:
+				begin
+					buffer.alu_out[3][7:0] <= {buffer.source[3][6:0],1'b0};
+				end
+
 				MARK: buffer.alu_out[3] <= 'b0;
+
 				MTPS: buffer.alu_out[3] <= 'b0;
+
 				MFPI: buffer.alu_out[3] <= 'b0;
-				MFPD: buffer.alu_out[3] <= 'b0;
-				MTPI: buffer.alu_out[3] <= 'b0;
-				MTPD: buffer.alu_out[3] <= 'b0;
+
+				MFPD:
+				begin
+					buffer.alu_out[3] <= 'b0;
+				end
+
+				MTPI:
+				begin
+					//FIXME increment by 1 or 2
+					buffer.alu_out[3] <= cpu_register.stack_pointer + 1'b1;
+				end
+
+				MTPD:
+				begin 
+					//FIXME increment by 1 or 2
+					buffer.alu_out[3] <= cpu_register.stack_pointer + 1'b1;
+				end
+
 				SXT: buffer.alu_out[3] <= 'b0;
 				MFPS: buffer.alu_out[3] <= 'b0;
+
 				default: buffer.alu_out[3] <= 16'b0;
 			endcase // instruction.instruction_s.operand
+
 		end
 		else if (buffer.instruction_type[2] == DOUBLE_OPERAND_2)
 		begin

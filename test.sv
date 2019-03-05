@@ -1,17 +1,19 @@
 import parameters::*;
 module test();
 
-logic clock;
-pdp_isa ins (.clock(clock));
 
-// initial begin
-// 	//load the instructions into flash
-// 	$readmemh("instructions_file.ascii",memory.flash);
-// end
+
+logic [15:0] flashh 	[1023 : 0];
 
 initial begin
-	cpu_register.register[0] = 'd5;
-	cpu_register.register[1] = 'd1;
+	//load the instructions into flash
+	$readmemh("addc.ascii",flashh);
+end
+
+initial begin
+	// cpu_register.register[0] = 'd5;
+	// cpu_register.register[1] = 'd1;
+	$monitor("memory  %b \n %b\n %b \n %b \n %b \n %b \n %b \n", flashh[0] flashh[1], flashh[2], flashh[3], flashh[4], flashh[5], flashh[6], flashh[7]);
 end
 
 // initial begin
@@ -30,23 +32,23 @@ end
 
 //give instructions here
 initial begin
-memory.flash[0] = 16'o060001;
-memory.flash[1] = 16'o060000;
-memory.flash[2] = 16'o027654;
-memory.flash[3] = 16'o127654;
-memory.flash[4] = 16'o037654;
-memory.flash[5] = 16'o137654;
-memory.flash[6] = 16'o047654;
-memory.flash[7] = 16'o147654;
-memory.flash[8] = 16'o057654;
-memory.flash[9] = 16'o157654;
-memory.flash[10] = 16'o067654;
-memory.flash[11] = 16'o167654;
-memory.flash[12] = 16'o070654;
-memory.flash[13] = 16'o071654;
-memory.flash[14] = 16'o072654;
-memory.flash[15] = 16'o073654;
-memory.flash[16] = 16'o074654;
+// memory.flash[0] = 16'o060001;
+// memory.flash[1] = 16'o060000;
+// memory.flash[2] = 16'o027654;
+// memory.flash[3] = 16'o127654;
+// memory.flash[4] = 16'o037654;
+// memory.flash[5] = 16'o137654;
+// memory.flash[6] = 16'o047654;
+// memory.flash[7] = 16'o147654;
+// memory.flash[8] = 16'o057654;
+// memory.flash[9] = 16'o157654;
+// memory.flash[10] = 16'o067654;
+// memory.flash[11] = 16'o167654;
+// memory.flash[12] = 16'o070654;
+// memory.flash[13] = 16'o071654;
+// memory.flash[14] = 16'o072654;
+// memory.flash[15] = 16'o073654;
+// memory.flash[16] = 16'o074654;
 // memory.flash[0] = 'b0001100011000000;
 // memory.flash[1] = 'b0111100011000001;
 // memory.flash[2] = 'b0101100011000010;
@@ -62,10 +64,6 @@ memory.flash[16] = 16'o074654;
 $stop;
 end
 
-initial begin
-	clock = 1'b0;
-	forever #10 clock = ~clock;
-end
 
 initial
 begin
@@ -82,7 +80,7 @@ begin
 			$display(,"%s R%d",instruction.instruction_s.opcode, instruction.instruction_s.dest);
 			DOUBLE_OPERAND_1:
 			//$display($time,"	%s	%d	%b    %s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_1.opcode,instruction.instruction_d_1.dest, instruction.instruction_d_1.src);
-			$display("%s R%d, R%d",instruction.instruction_d_1.opcode,instruction.instruction_d_1.dest, instruction.instruction_d_1.src);
+			$display("%s R%d, R%d",instruction.instruction_d_1.opcode, instruction.instruction_d_1.src, instruction.instruction_d_1.dest);
 			DOUBLE_OPERAND_2:
 			//$display($time,"	%s  %d	%b 	%s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
 			$display("%s R%d,R%d",instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
