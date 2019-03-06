@@ -26,7 +26,7 @@ parameter MULTIPLY_INSTRUCTIONS = 4'b0111;
 struct {
 	//FIXME should 15 come from const ? 
 	logic [7:0] flash 	[`FLASH_MEMORY_SIZE - 1 : 0];	//flash memory for 16-bit instructions
-	logic [15:0] data 	[`DATA_MEMORY_SIZE  - 1 : 0];	//data memory
+	//logic [15:0] data 	[`DATA_MEMORY_SIZE  - 1 : 0];	//data memory
 }memory;												//32 K words memory i.e. 64 KB
 
 
@@ -199,28 +199,36 @@ typedef enum logic [1:0] {
 //states for FSM
 typedef enum {S4, S1, S2, S3} state_t;
 
-function automatic logic [15:0] operand_get(logic [2:0] mode_dest, logic [2:0] dest, logic [15:0] xVal);
+function automatic logic [15:0] operand_get(logic [2:0] mode_dest, logic [2:0] dest);
 	unique case (mode_dest)	//decode addressing mode
 		'b000:
 			return cpu_register.register[dest];		//register addressing mode
 		'b001:
-			return	memory.data[cpu_register.register[dest]];													//calculate register for all addresses.
+			return	memory.flash[cpu_register.register[dest]];													//calculate register for all addresses.
 		'b010:
+		begin
 			cpu_register.register[dest] = cpu_register.register[dest] + 1; 
-			return memory.data[cpu_register.register[dest]-1];
+			return memory.flash[cpu_register.register[dest]-1];
+		end
 		'b011:
+		begin
 			cpu_register.register[dest] = cpu_register.register[dest] + 2; 
-			return memory.data[cpu_register.register[dest]-2];
+			return memory.flash[cpu_register.register[dest]-2];
+		end
 		'b100:
+		begin
 			cpu_register.register[dest] = cpu_register.register[dest] - 1; 
-			return memory.data[cpu_register.register[dest]];
+			return memory.flash[cpu_register.register[dest]];
+		end
 		'b101:
+		begin
 			cpu_register.register[dest] = cpu_register.register[dest] - 2; 
-			return memory.data[cpu_register.register[dest]];
+			return memory.flash[cpu_register.register[dest]];
+		end
 		'b110:
-			return memory.data[cpu_register.register[dest]+xVal];
+			return memory.flash[cpu_register.register[dest]+(cpu_register.program_counter + 2'd2)];
 		'b111:
-			return memory.data[memory.data[cpu_register.register[dest]+xVal]];
+			return memory.flash[memory.flash[cpu_register.register[dest]+ (cpu_register.program_counter + 2'd2)]];
 
 		default: return 0;
 	endcase // instruction.instruction_s.mode_dest
