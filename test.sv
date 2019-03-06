@@ -44,25 +44,25 @@ begin
 				begin
 					//$display($time,"	%s	%d	%b    %s R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_s.opcode, instruction.instruction_s.dest);
 					$strobe($time,"	instruction = %s R%d",instruction.instruction_s.opcode, instruction.instruction_s.dest);
-					$trobe("operands : %o "instruction.instruction_s.dest);
+					$strobe("operands : %o ",ins.buffer.destination[2]);
 				end
 				DOUBLE_OPERAND_1:
 				begin
 					//$display($time,"	%s	%d	%b    %s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_1.opcode,instruction.instruction_d_1.dest, instruction.instruction_d_1.src);
 					$strobe($time,"	instruction = %s R%d, R%d",instruction.instruction_d_1.opcode, instruction.instruction_d_1.src, instruction.instruction_d_1.dest);
-					$trobe("operands :src= %o  dest=%o"instruction.instruction_d_1.src, instruction.instruction_d_1.dest);
+					$strobe("operands :src= %o  dest=%o",ins.buffer.source[2], ins.buffer.destination [2]);
 				end
 				DOUBLE_OPERAND_2:
 				begin
 					//$display($time,"	%s  %d	%b 	%s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
 					$strobe($time,"	instruction = %s R%d,R%d",instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
-					$trobe("operands :reg= %o  src_dest=%o"instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
+					$strobe("operands :reg= %o  src_dest=%o",ins.buffer.destination[2], ins.buffer.source[2]);
 				end
 				CONDITIONAL_BRANCH:
 				begin
 					//$display($time,"	%s  %d	%b 	%s %d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_c.opcode,instruction.instruction_c.offset);
 					$strobe($time,"	instruction = %s %o",instruction.instruction_c.opcode,instruction.instruction_c.offset);
-					$strobe("operands : offset = %o "instruction.instruction_c.offset);
+					$strobe("operands : offset = %o ",instruction.instruction_c.offset);
 				end
 				default:
 				$strobe("No instruction found");
