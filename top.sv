@@ -79,7 +79,7 @@ initial begin
 					$display("- detected");
 					
 					PC = $fscanf(fd, "%o ", {memory.flash[i], memory.flash[i+1]});
-					$display("memory[%d] = %16o ",i,{memory.flash[i],memory.flash[i+1]});
+					$display("memory[%d] = %6o ",i,{memory.flash[i],memory.flash[i+1]});
 					i = i+2;
 					//$display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
 					// PC = $fscanf(fd, "%d ", PC1);
