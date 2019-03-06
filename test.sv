@@ -41,17 +41,29 @@ begin
 			$strobe("Program counter = %d" , cpu_register.program_counter);
 			case (ins.buffer.instruction_type[2])
 				SINGLE_OPERAND:
-				//$display($time,"	%s	%d	%b    %s R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_s.opcode, instruction.instruction_s.dest);
-				$strobe($time,"	instruction = %s R%d",instruction.instruction_s.opcode, instruction.instruction_s.dest);
+				begin
+					//$display($time,"	%s	%d	%b    %s R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_s.opcode, instruction.instruction_s.dest);
+					$strobe($time,"	instruction = %s R%d",instruction.instruction_s.opcode, instruction.instruction_s.dest);
+					$trobe("operands : %o "instruction.instruction_s.dest);
+				end
 				DOUBLE_OPERAND_1:
-				//$display($time,"	%s	%d	%b    %s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_1.opcode,instruction.instruction_d_1.dest, instruction.instruction_d_1.src);
-				$strobe($time,"	instruction = %s R%d, R%d",instruction.instruction_d_1.opcode, instruction.instruction_d_1.src, instruction.instruction_d_1.dest);
+				begin
+					//$display($time,"	%s	%d	%b    %s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_1.opcode,instruction.instruction_d_1.dest, instruction.instruction_d_1.src);
+					$strobe($time,"	instruction = %s R%d, R%d",instruction.instruction_d_1.opcode, instruction.instruction_d_1.src, instruction.instruction_d_1.dest);
+					$trobe("operands :src= %o  dest=%o"instruction.instruction_d_1.src, instruction.instruction_d_1.dest);
+				end
 				DOUBLE_OPERAND_2:
-				//$display($time,"	%s  %d	%b 	%s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
-				$strobe($time,"	instruction = %s R%d,R%d",instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
+				begin
+					//$display($time,"	%s  %d	%b 	%s R%d, R%d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
+					$strobe($time,"	instruction = %s R%d,R%d",instruction.instruction_d_2.opcode,instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
+					$trobe("operands :reg= %o  src_dest=%o"instruction.instruction_d_2.reg_op, instruction.instruction_d_2.src_dest);
+				end
 				CONDITIONAL_BRANCH:
-				//$display($time,"	%s  %d	%b 	%s %d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_c.opcode,instruction.instruction_c.offset);
-				$strobe($time,"	instruction = %s %o",instruction.instruction_c.opcode,instruction.instruction_c.offset);
+				begin
+					//$display($time,"	%s  %d	%b 	%s %d",ins.p_state, ins.buffer.next_pc, instruction.instruction_x, instruction.instruction_c.opcode,instruction.instruction_c.offset);
+					$strobe($time,"	instruction = %s %o",instruction.instruction_c.opcode,instruction.instruction_c.offset);
+					$strobe("operands : offset = %o "instruction.instruction_c.offset);
+				end
 				default:
 				$strobe("No instruction found");
 			endcase
