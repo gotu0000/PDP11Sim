@@ -1,0 +1,6 @@
+#to get the file from local machine to machine which has faust's assembler
+scp test.mac jcharla@linux.cecs.pdx.edu:/u/jcharla/ECE586/
+#to get the ascii file to local machine
+scp jcharla@linux.cecs.pdx.edu:/u/jcharla/ECE586/test.ascii .
+#to transfer the file from local machine to redhat machine 
+scp test.ascii jcharla@redhat.ece.pdx.edu:/u/jcharla/PDP11Sim/
