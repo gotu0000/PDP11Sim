@@ -116,6 +116,7 @@ begin
 		begin
 			instruction.instruction_x = {memory.flash[cpu_register.program_counter]
 									, memory.flash[cpu_register.program_counter + 1'b1]};
+			
 		end
 
 		INSTRUCTION_DECODE:

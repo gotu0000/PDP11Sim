@@ -31,6 +31,7 @@ end
 
 initial 
 begin
+	open_trace_file_to_write();
 	reset = 1'b1;
 	//check for the passed argument
 	if ($value$plusargs("FILE=%s", filename) == 1)
@@ -101,6 +102,7 @@ begin
 	if(doneEXE == 1'b1)
 	begin
 		$display("Goodbye Cruel World");
+		close_trace_file_to_write();
 		$stop;
 	end
 end
