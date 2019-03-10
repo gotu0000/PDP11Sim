@@ -1007,6 +1007,179 @@ begin
  						//always branch
  						branch_taken = 1'b1;
 					end
+
+					BNE:
+					begin
+						if(cpu_register.processor_status_word.zero_flag == 1'b0)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BEQ:
+					begin
+						if(cpu_register.processor_status_word.zero_flag == 1'b1)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BGE:
+					begin
+						if((cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.overflow_flag) == 1'b0)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BLT:
+					begin
+						if((cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.overflow_flag) == 1'b1)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BGT:
+					begin
+						if((cpu_register.processor_status_word.zero_flag | (cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.overflow_flag)) == 1'b0)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BLE:
+					begin
+						if((cpu_register.processor_status_word.zero_flag | (cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.overflow_flag)) == 1'b1)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BPL:
+					begin
+						if(cpu_register.processor_status_word.neg_value == 1'b0)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BMI:
+					begin
+						if(cpu_register.processor_status_word.neg_value == 1'b1)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					
+					end
+					BHI:
+					begin
+						if((cpu_register.processor_status_word.carry_bit | cpu_register.processor_status_word.zero_flag) == 1'b0)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BLOS:
+					begin
+						if((cpu_register.processor_status_word.carry_bit | cpu_register.processor_status_word.zero_flag) == 1'b1)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BVC:
+					begin
+						if(cpu_register.processor_status_word.overflow_flag == 1'b0)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					
+					end
+					BVS:
+					begin
+						if(cpu_register.processor_status_word.overflow_flag == 1'b1)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					BCC:
+					begin
+						if(cpu_register.processor_status_word.carry_bit == 1'b0)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					
+					BCS:
+					begin
+						if(cpu_register.processor_status_word.carry_bit == 1'b1)
+						begin
+							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							branch_taken = 1'b1;
+						end
+						else
+						begin
+							branch_taken = 1'b0;
+						end
+					end
+					
 				endcase
 			end
 		end
@@ -1045,15 +1218,14 @@ begin
 				if(pc_add == 1'b1)
 				begin
 					cpu_register.program_counter = cpu_register.program_counter + 4;
-					$display("S IF PC=%d",cpu_register.program_counter);
+					$display("SIF PC=%d",cpu_register.program_counter);
 					
 				end
 				else
 				begin
 					cpu_register.program_counter = cpu_register.program_counter + 2;
-					$display("S ELSE PC=%d",cpu_register.program_counter);
+					$display("SELSE PC=%d",cpu_register.program_counter);
 				end
-
 			end
 			/*
 			else if(instruction_type == DOUBLE_OPERAND_2)
@@ -1063,21 +1235,21 @@ begin
 			end
 			else if(instruction_type == DOUBLE_OPERAND_1)
 			begin
-			end
 				cpu_register.program_counter = cpu_register.program_counter + 2;
 				$display("PC=%d",cpu_register.program_counter);
+			end
 			*/
 			else if(instruction_type == CONDITIONAL_BRANCH)
 			begin
 				if(branch_taken == 1'b1)
 				begin
 					cpu_register.program_counter = branch_addr;
-					$display("PC=%d",cpu_register.program_counter);
+					$display("BT PC=%d",cpu_register.program_counter);
 				end
 				else
 				begin
 					cpu_register.program_counter = cpu_register.program_counter + 2;
-					$display("PC=%d",cpu_register.program_counter);
+					$display("BNT PC=%d",cpu_register.program_counter);
 				end
 			end
 			else 
