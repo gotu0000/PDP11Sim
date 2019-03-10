@@ -19,14 +19,13 @@ package parameters;
 `include "pdp_11_const.vh"
 
 parameter HARD_CODED_SINGLE_OPERAND_BITS = 4'b0001;
-parameter HARD_CODED_DOUBLE_OPERAND_BITS = 4'b0000;
+parameter HARD_CODED_COND_BRANCHES_BITS = 4'b0000;
 parameter MULTIPLY_INSTRUCTIONS = 4'b0111;
 
 //struct to store memory element of our processor
 struct {
 	//FIXME should 15 come from const ? 
 	logic [7:0] flash 	[`FLASH_MEMORY_SIZE - 1 : 0];	//flash memory for 16-bit instructions
-	//logic [15:0] data 	[`DATA_MEMORY_SIZE  - 1 : 0];	//data memory
 }memory;												//32 K words memory i.e. 64 KB
 
 
@@ -48,22 +47,12 @@ struct {
 	//TODO can we have register[7:0]
 	//and make stack_pointer register[6] point to same thing?
 	//and make program_counter register[7] point to same thing?
-	logic [15:0] register[7:0];						//general purpose register (R0-R5)
+	logic [15:0] register[5:0];						//general purpose register (R0-R5)
 	logic [15:0] stack_pointer;						//R6 = stack pointer
-	logic [15:0] program_counter = 16'b0;					//R7 = program counter
+	logic [15:0] program_counter = 16'b0;			//R7 = program counter
 	processor_status_word_t processor_status_word;	//I = Interrupt, T = Trap, N = negative value, Z = Zero, V = overflow, C = carry
 	logic [15:0] fp_status_reg;						//floating point status register
 }cpu_register;
-
-union {
-	logic [15:0] stack_pointer;
-	logic [15:0] register[6];
-}reg_sp;
-
-union {
-	logic [15:0] program_counter;
-	logic [15:0] register[7];
-}reg_pc;
 
 //all 4 bit opcodes (1st bit(MSB) for byte/Word rest of 3 bits for operation)
 //takes care of word as well as byte Instructions
@@ -143,6 +132,19 @@ typedef enum logic [9:0] {
 typedef enum logic [9:0] {
 	BR = 10'o0004 	//Branch always
 	,BNE = 10'o0010	//Branch if not equal
+	,BEQ = 10'o0014
+	,BGE = 10'o0020
+	,BLT = 10'o0024
+	,BGT = 10'o0030
+	,BLE = 10'o0034
+	,BPL = 10'o1000
+	,BMI = 10'o1004
+	,BHI = 10'o1010
+	,BLOS = 10'o1014
+	,BVC = 10'o1020
+	,BVS = 10'o1024
+	,BCC = 10'o1030
+	,BCS = 10'o1034
 }opcode_t_3;
 
 //structure for double operand instructions type 1
@@ -195,42 +197,259 @@ typedef enum logic [1:0] {
 	,CONDITIONAL_BRANCH
 }instruction_type_t;
 
+//this function gets the operand for ALU opeartion
+//one bit for pc relative
+//one bit for PC+2,PC+4,if not pc relative
+//one bit for reg/memory, useful while writing back
+function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [2:0] reg_number, logic acc_type);
+	logic [34:0] ret_val = 0;
+	logic [15:0] x_op = 0;
+	logic [15:0] addr_of_addr = 0;
+	$display("SIO MODE=%d",reg_mode);
+	$display("SIO REG_NUM=%d",reg_number);
+	$display("SIO ACC_TYPE=%d",acc_type);
+	
+	if(reg_number < 3'b110)
+	begin
+		ret_val[34] = 1'b0;
+		unique case (reg_mode)	//decode addressing mode
+			3'b000:
+			begin
+				//PC+2
+				ret_val[33] = 1'b0;
+				//reg access
+				ret_val[32:16] = 0;
+				//R contains operand
+				ret_val[15:0] = cpu_register.register[reg_number];
+			end
+
+			3'b001:
+			begin
+				//PC+2
+				ret_val[33] = 1'b0;
+				//address , will be used at time of execution
+				//mem access
+				ret_val[32:16] = {1'b1,cpu_register.register[reg_number]};				
+				//mem[R] contains operand
+				ret_val[15:8] = memory.flash[cpu_register.register[reg_number]];
+				ret_val[7:0] = memory.flash[cpu_register.register[reg_number]+16'd1]; 
+			end
+
+			3'b010:
+			begin
+				//PC+2
+				ret_val[33] = 1'b0;
+				if(acc_type == 1'b1)
+				begin
+					cpu_register.register[reg_number] = cpu_register.register[reg_number] + 16'd1;
+					ret_val[32:16] = {1'b1,(cpu_register.register[reg_number]-16'd1)};
+					ret_val[15:8] = 8'b0;
+					ret_val[7:0] = memory.flash[(cpu_register.register[reg_number]-16'd1)];
+				end
+				else
+				begin
+					cpu_register.register[reg_number] = cpu_register.register[reg_number] + 16'd2;
+					ret_val[32:16] = {1'b1,(cpu_register.register[reg_number]-16'd2)};
+					ret_val[15:8] = memory.flash[cpu_register.register[reg_number]-16'd2];
+					ret_val[7:0] = memory.flash[cpu_register.register[reg_number]-16'd1];
+				end
+			end
+
+			3'b011:
+			begin
+				//PC+2
+				ret_val[33] = 1'b0;
+				cpu_register.register[reg_number] = cpu_register.register[reg_number]+16'd2;
+
+				ret_val[32:24] = {1'b1,memory.flash[cpu_register.register[reg_number]-16'd2]};
+				ret_val[23:16] = memory.flash[cpu_register.register[reg_number]-16'd1];
+				addr_of_addr = ret_val[31:16];
+
+				ret_val[15:8] = memory.flash[addr_of_addr];
+				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+			end
+
+			3'b100:
+			begin
+				ret_val[33] = 1'b0;
+				//if byte
+				if(acc_type == 1'b1)
+				begin
+					cpu_register.register[reg_number] = cpu_register.register[reg_number]-16'd1;
+					ret_val[32:16] = {1'b1,(cpu_register.register[reg_number])};
+					ret_val[15:8] = 8'b0;
+					ret_val[7:0] = memory.flash[cpu_register.register[reg_number]];
+				end
+				else
+				begin
+					cpu_register.register[reg_number] = cpu_register.register[reg_number]-16'd2;
+					ret_val[32:16] = {1'b1,(cpu_register.register[reg_number])};
+					ret_val[15:8] = memory.flash[cpu_register.register[reg_number]];
+					ret_val[7:0] = memory.flash[cpu_register.register[reg_number]+16'd1];
+				end
+			end
+
+			3'b101:
+			begin
+				ret_val[33] = 1'b0;
+				cpu_register.register[reg_number] = cpu_register.register[reg_number]-16'd2;
+				ret_val[32:24] = {1'b1,(memory.flash[cpu_register.register[reg_number]])};
+				ret_val[23:16] = (memory.flash[cpu_register.register[reg_number]+16'd1]);
+				addr_of_addr = ret_val[31:16];
+				ret_val[15:8] = memory.flash[addr_of_addr];
+				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+			end
+
+			3'b110:
+			begin
+				//PC + 4
+				ret_val[33] = 1'b1;
+				x_op = {memory.flash[cpu_register.program_counter+16'd2]
+										,memory.flash[cpu_register.program_counter+16'd3]};
+				ret_val[32:16] = {1'b1,(cpu_register.register[reg_number]+x_op)};
+				addr_of_addr = ret_val[31:16];
+				ret_val[15:8] = memory.flash[addr_of_addr];
+				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+			end
+
+			3'b111:
+			begin
+				//PC + 4
+				ret_val[33] = 1'b1;
+				x_op = {memory.flash[cpu_register.program_counter+16'd2],memory.flash[cpu_register.program_counter+16'd3]};
+				
+
+				ret_val[32:24] = {1'b1,memory.flash[cpu_register.register[reg_number]+
+										x_op]};
+				ret_val[23:16] = memory.flash[cpu_register.register[reg_number]+
+										x_op+16'd1];
+
+				addr_of_addr = ret_val[31:16];
+
+				ret_val[15:8] = memory.flash[addr_of_addr];
+				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+			end
+			
+			default:
+			begin
+				$display("SOMETHING IS WRONG=%d,%d",reg_mode,reg_number);
+				ret_val = 0;
+			end
+		endcase 
+	end
+	
+	//for PC relative
+	else if(reg_number == 3'b111)
+	begin
+		$display("PC RELATIVE=%d",reg_mode);
+		ret_val[34] = 1'b1;
+		unique case (reg_mode)	//decode addressing mode
+
+			3'b010:
+			begin
+				//PC+2
+				ret_val[33] = 1'b0;
+				cpu_register.program_counter = cpu_register.program_counter + 16'd2;
+				ret_val[32:16] = {1'b1,(cpu_register.program_counter)};
+				ret_val[15:0] = {memory.flash[cpu_register.program_counter]
+								,memory.flash[cpu_register.program_counter+16'd1]};
+			end
+
+			3'b011:
+			begin
+				//PC+2
+				ret_val[33] = 1'b0;
+				cpu_register.program_counter = cpu_register.program_counter+16'd2;
+				ret_val[32:16] = {1'b1,memory.flash[cpu_register.program_counter],
+									memory.flash[cpu_register.program_counter+16'd1]};
+
+				addr_of_addr = ret_val[31:16];
+
+				ret_val[15:8] = memory.flash[addr_of_addr];
+
+				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+			end
+
+			3'b110:
+			begin
+				//PC + 4
+				ret_val[33] = 1'b1;
+				ret_val[32:16] = {1'b1,(cpu_register.program_counter+16'd4+
+										{memory.flash[cpu_register.program_counter+16'd2]
+										,memory.flash[cpu_register.program_counter+16'd3]
+											})};
+
+				addr_of_addr = ret_val[31:16];
+
+				ret_val[15:8] = memory.flash[addr_of_addr];
+
+				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+
+				// $display("X VAL=%o",({memory.flash[cpu_register.program_counter+16'd2]
+				// 		,memory.flash[cpu_register.program_counter+16'd3]}+
+				// 		16'd4+
+				// 		cpu_register.program_counter));
+
+										
+				// $display("RET VAL=%o_%o_%o_%o_%o_%o PC=%d",ret_val[34],ret_val[33],ret_val[32]
+				// 							,ret_val[31:16]
+				// 							,ret_val[15:8]
+				// 							,ret_val[7:0]
+				// 							,cpu_register.program_counter);
+			end
+
+			3'b111:
+			begin
+				//PC + 4
+				ret_val[33] = 1'b1;
+
+				ret_val[32:24] = {1'b1,memory.flash[(cpu_register.program_counter+16'd4+
+										{memory.flash[cpu_register.program_counter+16'd2]
+										,memory.flash[cpu_register.program_counter+16'd3]
+											})]};
+
+				ret_val[23:16] = {1'b1,memory.flash[(cpu_register.program_counter+16'd4+
+										{memory.flash[cpu_register.program_counter+16'd2]
+										,memory.flash[cpu_register.program_counter+16'd3]
+											})+16'd1]};
+
+				addr_of_addr = ret_val[31:16];
+
+				ret_val[15:8] = memory.flash[addr_of_addr];
+
+				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+			end
+			default:
+			begin
+				$display("SOMETHING IS WRONG=%d,%d",reg_mode,reg_number);
+				ret_val = 0;
+			end
+		endcase
+	end
+	return ret_val;
+endfunction : single_operand_get
+
+function automatic logic [50:0] double_operand_get(logic [2:0] s_reg_mode, logic [2:0] s_reg_number,logic [2:0] d_reg_mode, logic [2:0] d_reg_number, logic acc_type);
+	logic [50:0] ret_val = 0;
+
+	logic [15:0] x_op_s = 0;
+	logic [15:0] addr_of_addr_s = 0;
+	logic [15:0] x_op_d = 0;
+	logic [15:0] addr_of_addr_d = 0;
+
+	return ret_val;
+endfunction : double_operand_get
 
 //states for FSM
-typedef enum {S4, S1, S2, S3} state_t;
+typedef enum {
+		SM_RESET
+		, UPDATE_INIT_PC
+		, INSTRUCTION_FETCH
+		, INSTRUCTION_DECODE
+		, INSTRUCTION_EXECUTE
+		, MEM_WRITE
+		, CHECK_END_OF_CODE
+		, SM_DONE
+		} state_t;
 
-function automatic logic [15:0] operand_get(logic [2:0] mode_dest, logic [2:0] dest);
-	unique case (mode_dest)	//decode addressing mode
-		'b000:
-			return cpu_register.register[dest];		//register addressing mode
-		'b001:
-			return	memory.flash[cpu_register.register[dest]];													//calculate register for all addresses.
-		'b010:
-		begin
-			cpu_register.register[dest] = cpu_register.register[dest] + 1; 
-			return memory.flash[cpu_register.register[dest]-1];
-		end
-		'b011:
-		begin
-			cpu_register.register[dest] = cpu_register.register[dest] + 2; 
-			return memory.flash[cpu_register.register[dest]-2];
-		end
-		'b100:
-		begin
-			cpu_register.register[dest] = cpu_register.register[dest] - 1; 
-			return memory.flash[cpu_register.register[dest]];
-		end
-		'b101:
-		begin
-			cpu_register.register[dest] = cpu_register.register[dest] - 2; 
-			return memory.flash[cpu_register.register[dest]];
-		end
-		'b110:
-			return memory.flash[cpu_register.register[dest]+(cpu_register.program_counter + 2'd2)];
-		'b111:
-			return memory.flash[memory.flash[cpu_register.register[dest]+ (cpu_register.program_counter + 2'd2)]];
-
-		default: return 0;
-	endcase // instruction.instruction_s.mode_dest
-endfunction : operand_get
 endpackage

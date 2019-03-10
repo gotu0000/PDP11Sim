@@ -1,9 +1,9 @@
 import parameters::*;
 module test();
 
-
-
+/*J
 logic [15:0] flashh 	[1023 : 0];
+*/
 
 /*initial begin
 	//load the instructions into flash
@@ -32,6 +32,7 @@ end*/
 
 //give instructions here
 
+/*J
 always @ (ins.p_state)
 begin
 		$display("\n\nSTATE = %p",ins.p_state);
@@ -79,4 +80,5 @@ begin
 		$stop;
 	end
 end
+*/
 endmodule

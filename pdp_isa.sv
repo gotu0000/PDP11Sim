@@ -1,437 +1,1083 @@
 import parameters::*;
 
 module pdp_isa (
-	input clock
+	input clock,
+	input reset, 	//reset active high,asynchronous
+	input [15:0] pCStart,
+	input [15:0] pCEnd,
+	output logic doneEXE
 );
 
-logic [15:0] src_buffer, dest_buffer, src_dest_buffer;		//src and dest buffers
-logic [7:0] imm_offset;						//immediate offset buffer
-logic [15:0] branch_address;
-logic [15:0] alu_buffer;					//temporary stores alu operations
+state_t p_state, n_state;
+//use this for decoding
+//and fetching operand
+logic [2:0] reg_source_mode;
+logic [2:0] reg_source;
+logic [2:0] reg_dest_mode;
+logic [2:0] reg_dest;
+logic byte_word;
+//ret value of single instruction
+logic [34:0] single_inst_ret;
+logic [50:0] double_inst_ret;
 
-//buffers for pipelining
-struct {
-	logic [15:0] instruction [4:1];
-	opcode_t_0 opcode_d_1 [4:1];
-	opcode_t_1 opcode_d_2 [4:1];
-	opcode_t_2 opcode_s [4:1];
-	opcode_t_3 opcode_b [4:1];
-	logic [15:0] source [4:1];
-	logic [15:0] destination [4:1];
-	logic [15:0] alu_out [4:1];
-	logic [15:0] branch_addr;
-	instruction_type_t instruction_type [4:1];
-	logic [15:0] next_pc;
-}buffer;
+//source operand should be fetched in this
+logic [15:0] source_operand;
+logic [15:0] dest_operand;
+logic pc_relative;
+logic reg_mem;
+logic pc_add;
+//register number in which i want to store
+logic [2:0] dest_operand_reg;
+//address of destination in which
+//we want to write
+logic [15:0] dest_operand_addr;
 
-logic [15:0] PC1 = 'b0, PC2 = 'b0; //for adding PC offset and relative PC
-//
-state_t p_state, n_state = S1;
+//output of execution can be stored in this
+logic [15:0] alu_out;
+logic [15:0] alu_out_lsb;
+//incase of branch store address over here
+logic [15:0] branch_addr;
 
-//instruction fetch
-always_comb
-begin
-//	if (halt == FALSE && branch_taken == FALSE)
-//	begin
-	if(p_state == S1)
-	begin
-		if (cpu_register.program_counter == 1'b0)
-		begin
-			//buffer.next_pc = cpu_register.program_counter + PC1;
-			cpu_register.program_counter = cpu_register.program_counter + PC1;		//updated program counter
-			instruction.instruction_x = {memory.flash[cpu_register.program_counter], memory.flash[cpu_register.program_counter + 1'b1]};
-			buffer.instruction[1] = instruction.instruction_x;
-			$display("PC ini = %d %o",cpu_register.program_counter, instruction.instruction_x);
-			
-		//if_buffer <= program_counter;
-		//instruction.instruction_d <= program_counter;
-		end
-		else
-		begin
-			//buffer.next_pc = cpu_register.program_counter;
-			//$display("PC = %d",cpu_register.program_counter);
-			cpu_register.program_counter = cpu_register.program_counter + 2'd2 + PC2;		//updated program counter
-			instruction.instruction_x = {memory.flash[cpu_register.program_counter], memory.flash[cpu_register.program_counter + 1'b1]};
-			buffer.instruction[1] = instruction.instruction_x;
-		end
-	end
-	else begin
-		//buffer.next_pc = buffer.next_pc;
-		cpu_register.program_counter = cpu_register.program_counter;
-		instruction.instruction_x = instruction.instruction_x;
-		buffer.instruction[1] = buffer.instruction[1];
-	end
-	//end
-//	else if (branch_taken == TRUE)
-//		program_counter <= branch_buffer;			//address of branch to be taken;
-end
+instruction_type_t instruction_type;
 
-//instruction decode
-always_comb
-begin
-	buffer.instruction[2] = buffer.instruction[1];
-	//determine type of instruction
-	if (p_state == S2)
-	begin
-		if (instruction.instruction_x[14:11] == HARD_CODED_SINGLE_OPERAND_BITS) begin						//implies single operand instruction
-			//$display("single instruction : %b",buffer.instruction[1]);
-			buffer.instruction_type[2] = SINGLE_OPERAND; end
-		else if (instruction.instruction_x[14:11] == HARD_CODED_DOUBLE_OPERAND_BITS)	begin				//implies conditional branch instruction
-			//$display("cb instruction : %b",buffer.instruction[1]);
-			buffer.instruction_type[2] = CONDITIONAL_BRANCH; end
-		else if (instruction.instruction_x[15:12] == MULTIPLY_INSTRUCTIONS) begin
-			//$display("mul instruction : %b",buffer.instruction[1]);
-			buffer.instruction_type[2] = DOUBLE_OPERAND_2;					end									//double operand type 2
-		else begin
-			//$display("double instruction : %b",buffer.instruction[1]);
-			buffer.instruction_type[2] = DOUBLE_OPERAND_1; end
-
-
-		//determine the oprands
-		if (buffer.instruction_type[2] == SINGLE_OPERAND)
-		begin
-
-
-			//call function to calculate the operand
-			buffer.destination[2] = operand_get(instruction.instruction_s.mode_dest,instruction.instruction_s.dest);
-			//$display("src/dest = %d",buffer.destination[2]);
-			if (instruction.instruction_s.dest == 'd7)
-			begin
-				//cpu_register.program_counter <= cpu_register.program_counter + 2'd2;
-				PC2 = 1'd2;
-			end
-			else 
-			begin
-				PC2 = 1'd2;
-				//cpu_register.program_counter <= cpu_register.program_counter;
-			end
-		end
-		else if (buffer.instruction_type[2] == DOUBLE_OPERAND_1)
-		begin
-			//for add
-			buffer.source[2]  = operand_get (instruction.instruction_d_1.mode_src,instruction.instruction_d_1.src);
-			//$display("src/dest = %d",buffer.destination[2]);
-			buffer.destination [2] = operand_get (instruction.instruction_d_1.mode_dest,instruction.instruction_d_1.dest);
-			//$display("src/dest = %d",buffer.destination[2]);
-			if (instruction.instruction_d_1.src != 'd7 && instruction.instruction_d_1.dest != 7)
-			begin
-				PC2 = 'b0;
-			end
-			else if (instruction.instruction_d_1.src == 'd7 && instruction.instruction_d_1.dest == 'd7)
-			begin
-				PC2 = 'd4;
-			end
-			else //(buffer.source[2] == 'd7 || buffer.destination[2] == 'd7)
-			begin
-				$display("PC = 2");
-				PC2 = 'd2;
-			end
-		end
-		else if (buffer.instruction_type[2] == DOUBLE_OPERAND_2)
-		begin
-			buffer.source[2] = operand_get(instruction.instruction_d_2.mode,instruction.instruction_d_2.src_dest);
-			//$display("src/dest = %d",buffer.destination[2]);
-			buffer.destination[2] = cpu_register.register[instruction.instruction_d_2.reg_op];
-		end
-		else 						//for conditional branch instructions
-		begin
-			imm_offset = instruction.instruction_c.offset;			//calculate branch address
-		end
-		//$display("value of pc2 %d", PC2);
-	end
-	//save the opcode
-	else begin
-		buffer.instruction_type[2] = buffer.instruction_type[2];
-		buffer.source[2] = buffer.source[2];
-		buffer.destination[2] = buffer.destination[2];
-	end
-end
-
-//instruction execute
-always_comb
-begin
-	buffer.instruction_type[3] = buffer.instruction_type[2];
-	buffer.source[3] = buffer.source[2];
-	buffer.destination[3] = buffer.destination[2];
-	if(p_state == S3)
-	begin
-		if (buffer.instruction_type[2] == SINGLE_OPERAND)
-		begin
-			case (instruction.instruction_s.opcode)
-				//swap bytes
-				SWAB:
-				begin
-					buffer.alu_out[3] = {buffer.source[3][7:0],buffer.source[3][15:8]};
-				end
-
-				JSR: buffer.alu_out[3] = 'b0;
-
-				EMT: buffer.alu_out[3] = 'b0;
-
-				CLR: 
-				begin
-					buffer.alu_out[3] = 16'b0;
-					//STICKY do i need to set the zero flag
-					cpu_register.processor_status_word.zero_flag = 1'b1;
-				end
-
-				CLRB: 
-				begin
-					buffer.alu_out[3][7:0] = 8'b0;
-					cpu_register.processor_status_word.zero_flag = 1'b1;
-				end
-
-				//complement
-				//bit wise
-				//FIXME do i need to set the zero flag
-				COM: 
-				begin
-					buffer.alu_out[3] = ~buffer.source[3];
-					if(buffer.alu_out[3] == 16'b0)
-					begin
-						cpu_register.processor_status_word.zero_flag = 1'b1;
-					end
-				end
-
-				//complement, bit wise
-				COMB:
-				begin
-					buffer.alu_out[3][7:0] = ~buffer.source[3][7:0];
-					if(buffer.alu_out[3][7:0] == 8'b0)
-					begin
-						cpu_register.processor_status_word.zero_flag = 1'b1;
-					end
-				end
-
-				INC: 
-				begin
-					{cpu_register.processor_status_word.overflow_flag
-					,buffer.alu_out[3]} = buffer.source[3] + 1'b1;
-				end
-
-				INCB: 
-				begin
-					{cpu_register.processor_status_word.overflow_flag
-					,buffer.alu_out[3][7:0]} = buffer.source[3][7:0] + 1'b1;
-				end
-
-				DEC: 
-				begin
-					buffer.alu_out[3] = buffer.source[3] - 1'b1;
-					//FIXME should i check for overflow flag
-					//and the zero flag
-				end
-
-				DECB:
-				begin
-					buffer.alu_out[3][7:0] = buffer.source[3][7:0] - 1'b1;
-					//FIXME should i check for overflow flag
-					//and the zero flag
-				end
-
-				NEG:
-				begin
-					buffer.alu_out[3] = ~buffer.source[3];
-				end
-
-				NEGB:
-				begin
-					buffer.alu_out[3][7:0] = ~buffer.source[3][7:0];
-				end
-
-				ADC:
-				begin
-					{cpu_register.processor_status_word.overflow_flag
-					,buffer.alu_out[3]} = buffer.source[3] 
-					 			+ cpu_register.processor_status_word.carry_bit;
-				end
-
-				ADCB:
-				begin
-					{cpu_register.processor_status_word.overflow_flag
-					,buffer.alu_out[3][7:0]} = buffer.source[3][7:0] 
-					 			+ cpu_register.processor_status_word.carry_bit;
-				end
-
-				SBC:
-				begin
-					buffer.alu_out[3] = buffer.source[3] 
-					 			- cpu_register.processor_status_word.carry_bit;
-				end
-
-				SBCB:
-				begin
-					buffer.alu_out[3][7:0] = buffer.source[3][7:0] 
-					 			- cpu_register.processor_status_word.carry_bit;
-				end
-
-				TST:
-				begin 
-					buffer.alu_out[3] = buffer.source[3];
-					if(buffer.alu_out[3] == 16'b0)
-					begin
-						cpu_register.processor_status_word.zero_flag = 1'b1;
-					end
-				end
-
-				TSTB:
-				begin 
-					buffer.alu_out[3][7:0] = buffer.source[3][7:0];
-					if(buffer.alu_out[3][7:0] == 8'b0)
-					begin
-						cpu_register.processor_status_word.zero_flag = 1'b1;
-					end
-				end
-
-				ROR:
-				begin
-					buffer.alu_out[3] = {buffer.source[0],buffer.source[3][15:1]};
-				end
-
-				RORB:
-				begin
-					buffer.alu_out[3][7:0] = {buffer.source[0],buffer.source[3][7:1]};
-				end
-
-				ROL:
-				begin
-					buffer.alu_out[3] = {buffer.source[3][14:0],buffer.source[3][15]};
-				end
-				 
-				ROLB: 
-				begin
-					buffer.alu_out[3] = {buffer.source[3][6:0],buffer.source[3][7]};
-				end
-
-				ASR:
-				begin
-					buffer.alu_out[3] = {1'b0,buffer.source[3][15:1]};
-				end
-
-				ASRB:
-				begin
-					buffer.alu_out[3][7:0] = {1'b0,buffer.source[3][7:1]};
-				end
-
-				ASL:
-				begin
-					buffer.alu_out[3] = {buffer.source[3][14:0],1'b0};
-				end
-
-				ASLB:
-				begin
-					buffer.alu_out[3][7:0] = {buffer.source[3][6:0],1'b0};
-				end
-
-				MARK: buffer.alu_out[3] = 'b0;
-
-				MTPS: buffer.alu_out[3] = 'b0;
-
-				MFPI: buffer.alu_out[3] = 'b0;
-
-				MFPD:
-				begin
-					buffer.alu_out[3] = 'b0;
-				end
-
-				MTPI:
-				begin
-					//FIXME increment by 1 or 2
-					buffer.alu_out[3] = cpu_register.stack_pointer + 1'b1;
-				end
-
-				MTPD:
-				begin 
-					//FIXME increment by 1 or 2
-					buffer.alu_out[3] = cpu_register.stack_pointer + 1'b1;
-				end
-
-				SXT: buffer.alu_out[3] = 'b0;
-				MFPS: buffer.alu_out[3] = 'b0;
-
-				default: buffer.alu_out[3] = 16'b0;
-			endcase // instruction.instruction_s.operand
-
-		end
-		else if (buffer.instruction_type[2] == DOUBLE_OPERAND_2)
-		begin
-			//case (instruction.instruction_d.mode_src)							//mode_src is actually opcode (consider union renaming convention)
-					//MUL: 
-					buffer.alu_out[3] = 'b0;
-					// DIV:
-					// ASH:
-					// ASHC:
-					// XOR:
-					// SOB:
-				//endcase // instruction.instruction_d.mode_src)						//mode_src is actually opcode (consider union renaming convention
-			end
-		else if (buffer.instruction_type[2] == DOUBLE_OPERAND_1)
-			begin
-				//case (instruction.instruction_d.opcode)							//other ALU instructions
-				//	MOV: 
-				buffer.alu_out[3] = 'b0;
-					// MOVB:
-					// CMP:
-					// CMPBL
-					// BIT:
-					// BITB:
-					// BIC:
-					// BICB:
-					// BIS:
-					// BISB:
-					ADD: buffer.alu_out[3] = buffer.source[2] + buffer.destination[2];
-					// SUB:
-				//endcase
-			end
-		
-		else
-		begin 														//conditional branch operations
-			buffer.branch_addr[3] = imm_offset + cpu_register.program_counter;
-			//case (instruction.instruction_c.opcode)
-		end	
-	end
-		else begin
-			buffer.alu_out[3] = buffer.alu_out[3];
-	end
-end
-
-//memory and branch operations
-//always_comb
-
-//memory write back
-always_comb
-begin
-	buffer.instruction_type[4] = buffer.instruction_type[3];
-	//buffer.source[4] <= buffer.source[3];
-	//buffer.destination[4] <= buffer.destination[3];
-	//buffer.alu_out[4] <= buffer.alu_out[3];	
-	if(p_state == S4)
-	begin
-		if (buffer.instruction_type[3] == SINGLE_OPERAND && instruction.instruction_s.mode_dest != 1)			//that is not a register address instruction
-			memory.flash[buffer.destination[3]] = buffer.alu_out[3]; //ALU result
-		else if (buffer.instruction_type[3] == DOUBLE_OPERAND_1 && instruction.instruction_d_1.mode_dest != 1)
-			memory.flash[buffer.destination[3]] = buffer.alu_out[3]; //ALU result
-	end
-	else
-		memory.flash[buffer.destination[3]] = memory.flash[buffer.destination[3]];
-end
-
+logic carry_buffer;
+int byte_op =0;
 
 //FSM implementation
-always_ff @(posedge clock) 
+always_ff @(posedge clock,posedge reset) 
 begin
-	p_state <= n_state;
+	if(reset == 1'b1)
+	begin
+		p_state <= SM_RESET;
+	end
+	else
+	begin
+		p_state <= n_state;
+	end
+end
+
+//next state logic
+always_comb
+begin
+	case (p_state)
+		SM_RESET: 				n_state = UPDATE_INIT_PC;
+		UPDATE_INIT_PC: 		n_state = INSTRUCTION_FETCH;
+		INSTRUCTION_FETCH: 		n_state = INSTRUCTION_DECODE;
+		INSTRUCTION_DECODE: 	n_state = INSTRUCTION_EXECUTE;
+		INSTRUCTION_EXECUTE: 	n_state = MEM_WRITE;
+		MEM_WRITE: 				n_state = CHECK_END_OF_CODE;
+		CHECK_END_OF_CODE:
+		begin
+			if(cpu_register.program_counter >= pCEnd)
+			begin
+	 			n_state = SM_DONE;
+			end
+			else
+			begin
+	 			n_state = INSTRUCTION_FETCH;
+	 		end
+		end
+		SM_DONE: n_state = SM_DONE;
+		default : n_state = SM_RESET;
+	endcase // p_state
 end
 
 always_comb
 begin
 	case (p_state)
-		S1: n_state = S2;
-		S2: n_state = S3;
-		S3: n_state = S4;
-		S4: n_state = S1;
-		default : n_state = S1;
-	endcase // p_state
+		SM_RESET:
+		begin
+			//do nothing
+			doneEXE = 1'b0;
+		end
+
+		UPDATE_INIT_PC:
+		begin
+			// cpu_register.register[0] = 16'd0;
+			// cpu_register.register[1] = 16'd0;
+			// cpu_register.register[2] = 16'd0;
+			// cpu_register.register[3] = 16'd0;
+			// cpu_register.register[4] = 16'd0;
+			// cpu_register.register[5] = 16'd0;
+
+			cpu_register.register[0] = 16'o000014;
+			cpu_register.register[1] = 16'o000002;
+			cpu_register.register[2] = 16'o000004;
+			cpu_register.register[3] = 16'o000012;
+			cpu_register.register[4] = 16'o000010;
+			cpu_register.register[5] = 16'o000020;
+			cpu_register.program_counter = pCStart;
+		end
+
+		INSTRUCTION_FETCH:
+		begin
+			instruction.instruction_x = {memory.flash[cpu_register.program_counter]
+									, memory.flash[cpu_register.program_counter + 1'b1]};
+		end
+
+		INSTRUCTION_DECODE:
+		begin
+			//decode the instruction
+			$display("INST=%06o",instruction.instruction_x);
+
+			//implies single operand instruction
+			if (instruction.instruction_x[14:11] == HARD_CODED_SINGLE_OPERAND_BITS) 
+			begin
+				instruction_type = SINGLE_OPERAND;
+				reg_source_mode = instruction.instruction_s.mode_dest; 
+				reg_source = instruction.instruction_s.dest;
+				byte_word = instruction.instruction_s[15];
+				//will make changes in the register and fetch the operator
+				single_inst_ret = single_operand_get(reg_source_mode,reg_source,byte_word);
+				//extract values
+				source_operand = single_inst_ret[15:0];
+				dest_operand_addr = single_inst_ret[31:16];
+				reg_mem = single_inst_ret[32];
+				pc_add = single_inst_ret[33];
+				pc_relative = single_inst_ret[34];
+				dest_operand_reg = reg_source;
+				$display("SI SOURCE OPERAND=%d",source_operand);
+				$display("SI DEST ADDRESS=%d",dest_operand_addr);
+				$display("SI DEST REG=%d",dest_operand_reg);
+			end
+			else if (instruction.instruction_x[14:11] == HARD_CODED_COND_BRANCHES_BITS)
+			begin
+				instruction_type = CONDITIONAL_BRANCH; 
+			end
+			else if (instruction.instruction_x[15:12] == MULTIPLY_INSTRUCTIONS) 
+			begin
+				instruction_type = DOUBLE_OPERAND_2;					
+			end
+			else 
+			begin
+				instruction_type = DOUBLE_OPERAND_1; 
+			end
+		end
+
+		INSTRUCTION_EXECUTE:
+		begin
+			//execute the instruction
+			if (instruction_type == SINGLE_OPERAND)
+			begin
+				case (instruction.instruction_s.opcode)
+					//swap bytes
+					SWAB:
+					begin
+						alu_out = {source_operand[7:0],source_operand[15:8]};
+						if (alu_out[7] == 'b1)  
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else 
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						if (alu_out[7:0] == 'd0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+						cpu_register.processor_status_word.carry_bit = 1'b0;
+					end
+
+					CLR: 
+					begin
+						alu_out = 16'b0;
+						//STICKY do i need to set the zero flag
+						cpu_register.processor_status_word.zero_flag = 1'b1;
+						cpu_register.processor_status_word.neg_value	 = 1'b0;
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+						cpu_register.processor_status_word.carry_bit	 = 1'b0;
+					end
+
+					CLRB: 
+					begin
+						alu_out[7:0] = 8'b0;
+						cpu_register.processor_status_word.zero_flag = 1'b1;
+						cpu_register.processor_status_word.neg_value	 = 1'b0;
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+						cpu_register.processor_status_word.carry_bit	 = 1'b0;
+					end
+
+					//complement
+					//bit wise
+					//FIXME do i need to set the zero flag
+					COM: 
+					begin
+						alu_out = ~source_operand;
+						if(alu_out == 16'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = 'b0;
+						cpu_register.processor_status_word.carry_bit = 'b1;
+						if(alu_out[15] == 1'b1)
+						begin 
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin 
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+					end
+
+					//complement, bit wise
+					COMB:
+					begin
+						alu_out[7:0] = ~source_operand[7:0];
+						if(alu_out == 8'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = 'b0;
+						cpu_register.processor_status_word.carry_bit = 'b1;
+						if(alu_out[7] == 1'b1)
+						begin 
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin 
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+					end
+
+					INC: 
+					begin
+						{cpu_register.processor_status_word.overflow_flag
+						,alu_out} = source_operand + 1'b1;
+						if(alu_out == 16'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[15] == 1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+					end
+
+					INCB: 
+					begin
+						{cpu_register.processor_status_word.overflow_flag
+						,alu_out[7:0]} = source_operand[7:0] + 1'b1;
+						if(alu_out[7:0] == 8'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[7] == 1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+					end
+
+					DEC: 
+					begin
+						alu_out = source_operand - 1'b1;
+						//FIXME should i check for overflow flag
+						//and the zero flag
+						if (alu_out[15] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						if(alu_out == 'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+						
+						if(alu_out == 'o100000)
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+					end
+
+					DECB:
+					begin
+						alu_out[7:0] = source_operand[7:0] - 1'b1;
+						//FIXME should i check for overflow flag
+						//and the zero flag
+						if(alu_out[7:0] == 8'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[7] == 1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+					end
+
+					NEG:
+					begin
+						alu_out = -source_operand ;
+						if (alu_out[15] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						if(alu_out == 'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if(alu_out == 'o100000)
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+					end
+
+					NEGB:
+					begin
+						alu_out[7:0] = -source_operand[7:0];
+						if (alu_out[7] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						if(alu_out == 'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if(alu_out[7] == 'b1)
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+					end
+
+					ADC:
+					begin
+						{cpu_register.processor_status_word.carry_bit
+						,alu_out} = source_operand 
+						 			+ cpu_register.processor_status_word.carry_bit;
+						if (alu_out[15] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						if(alu_out == 'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if(alu_out == 'o100000)
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+					end
+					
+					ADCB:
+					begin
+						{cpu_register.processor_status_word.carry_bit
+						,alu_out[7:0]} = source_operand[7:0] 
+						 			+ cpu_register.processor_status_word.carry_bit;
+						if (alu_out[7] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+						if(alu_out == 'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+					end
+
+					SBC:
+					begin
+						{cpu_register.processor_status_word.carry_bit,
+						alu_out} = source_operand 
+						 			- cpu_register.processor_status_word.carry_bit;
+						if (alu_out[15] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+						if(alu_out == 'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+					end
+
+					SBCB:
+					begin
+						{cpu_register.processor_status_word.carry_bit
+						,alu_out[7:0]} = source_operand[7:0] 
+						 			- cpu_register.processor_status_word.carry_bit;
+						if (alu_out[7] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+						if(alu_out == 'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+					end
+
+					TST:
+					begin 
+						alu_out = source_operand;
+						if(alu_out == 16'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[15] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+						cpu_register.processor_status_word.carry_bit = 1'b0;
+					end
+
+					TSTB:
+					begin 
+						alu_out[7:0] = source_operand[7:0];
+						if(alu_out[7:0] == 8'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[7] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+						cpu_register.processor_status_word.carry_bit = 1'b0;
+					end
+
+					ROR:
+					begin
+						{alu_out,cpu_register.processor_status_word.carry_bit} = {cpu_register.processor_status_word.carry_bit,source_operand[15:0]};
+						if(alu_out == 16'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[15] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.carry_bit;
+					end
+
+					RORB:
+					begin
+						{alu_out[7:0],cpu_register.processor_status_word.carry_bit} = {cpu_register.processor_status_word.carry_bit,source_operand[7:0]};
+						if(alu_out == 8'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[7] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.carry_bit;
+					end
+
+					ROL:
+					begin
+						{cpu_register.processor_status_word.carry_bit,alu_out} = {source_operand[15:0],cpu_register.processor_status_word.carry_bit};
+						if(alu_out == 16'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[15] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.carry_bit;
+					end
+					 
+					ROLB: 
+					begin
+						alu_out = {source_operand[6:0],source_operand[7]};
+						if(alu_out == 8'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[7] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.carry_bit;
+					end
+
+					ASR:
+					begin
+						{alu_out,cpu_register.processor_status_word.carry_bit} = {source_operand[15],source_operand[15:0]};
+						if(alu_out == 16'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[15] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.carry_bit;
+					end
+
+					ASRB:
+					begin
+						{alu_out[7:0],cpu_register.processor_status_word.carry_bit} = {source_operand[7],source_operand[7:0]};
+						if(alu_out == 8'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[7] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.carry_bit;
+					end
+
+					ASL:
+					begin
+						{cpu_register.processor_status_word.carry_bit,alu_out} = {source_operand[15:0],1'b0};
+						if(alu_out == 16'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[15] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.carry_bit;
+					end
+
+					ASLB:
+					begin
+						{cpu_register.processor_status_word.carry_bit,alu_out[7:0]} = {source_operand[7:0],1'b0};
+						if(alu_out == 8'b0)
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.zero_flag = 1'b0;
+						end
+						if (alu_out[7] == 1'b1)
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.neg_value = 1'b0;
+						end
+						cpu_register.processor_status_word.overflow_flag = cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.carry_bit;
+					end
+
+					default: alu_out = 16'b0;
+				endcase // instruction.instruction_s.operand
+			end
+			else if (instruction_type == DOUBLE_OPERAND_2)
+			begin
+				case (instruction.instruction_d_2.opcode)
+					MUL: 
+					begin
+						{alu_out,alu_out_lsb} = source_operand* dest_operand;
+					end
+					DIV:
+					begin
+						alu_out = {dest_operand,cpu_register.register[instruction.instruction_d_2.reg_op+1]} / source_operand;
+						alu_out_lsb =  {dest_operand,cpu_register.register[instruction.instruction_d_2.reg_op+1]} % source_operand;
+					end
+					ASH:
+					begin
+						alu_out = dest_operand <<< source_operand;
+					end
+					ASHC:
+					begin
+						{alu_out,alu_out_lsb} = {dest_operand,cpu_register.register[instruction.instruction_d_2.reg_op+1]} <<< source_operand;
+					end
+					XOR:
+					begin
+						alu_out = source_operand ^ dest_operand;
+					end			
+				endcase // instruction.instruction_d.mode_src)						//mode_src is actually opcode (consider union renaming convention
+			end
+			//General and Logical instrictions	
+			//all 4 bit opcodes (1st bit(MSB) for byte/Word rest of 3 bits for operation)
+			else if (instruction_type == DOUBLE_OPERAND_1)
+			begin
+				case (instruction.instruction_d_1.opcode)							//other ALU instructions
+					MOV:
+					begin
+						alu_out =  source_operand ;
+
+						//overflow flag : clear
+						//Carry flag    : Not affected
+						cpu_register.processor_status_word.overflow_flag = 1'b0;                          
+					end
+					MOVB:
+					begin						
+						alu_out[7:0] =  source_operand[7:0] ;
+						//overflow flag : clear
+						//Carry flag    : Not affected
+						//Set Byte operation flag
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+						byte_op = 1;
+					end
+					CMP:
+					begin
+						{carry_buffer,alu_out} =  source_operand - dest_operand ;
+
+						// Overflow Flag : set if there was arithmetic overflow; that is,
+						// 					if the operands were of opposite signs and the sign of the destination was the same as the sign of the reult; cleared otherwise
+						if((source_operand[15] != dest_operand[15])&&( dest_operand[15] == alu_out[15]))
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+
+						// Carry flag: cleared if there was a carry from the
+						//				most significant bit of the result; set otherwise (indicating borrow required)
+						if (carry_buffer == 1'b1)
+						begin
+							cpu_register.processor_status_word.carry_bit = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.carry_bit = 1'b0;
+						end
+					end
+					CMPB:
+					begin
+						{carry_buffer,alu_out[7:0]} =  source_operand[7:0] - dest_operand[7:0] ;
+						//set Byte operation flag
+						byte_op = 1;
+
+						// Overflow Flag : set if there was arithmetic overflow; that is,
+						// 					if the operands were of opposite signs and the sign of the destination was the same as the sign of the reult; cleared otherwise
+						if((source_operand[7] != dest_operand[7])&&( dest_operand[7] == alu_out[7]))
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+
+						// Carry flag: cleared if there was a carry from the
+						//				most significant bit of the result; set otherwise (indicating borrow required)							
+						if (carry_buffer == 1'b1)
+						begin
+							cpu_register.processor_status_word.carry_bit = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.carry_bit = 1'b0;
+						end
+					end
+					BIT:
+					begin
+						//overflow flag : clear
+						//Carry flag    : Not affected
+						alu_out =  source_operand & dest_operand ;
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+					end
+					BITB:
+					begin
+						alu_out[7:0] =  source_operand[7:0] & dest_operand[7:0] ;
+						//overflow flag : clear
+						//Carry flag    : Not affected
+						//Set Byte operation flag
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+						byte_op = 1;
+					end
+					BIC:
+					begin
+						alu_out =  ~source_operand & dest_operand ;
+						//overflow flag : clear
+						//Carry flag    : Not affected
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+					end
+					BICB:
+					begin
+						alu_out[7:0] =  ~source_operand[7:0] & dest_operand[7:0] ;
+						//overflow flag : clear
+						//Carry flag    : Not affected
+						//Set Byte operation flag
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+						byte_op = 1;
+					end
+					BIS:
+					begin
+						alu_out = dest_operand | source_operand ; 
+						//overflow flag : clear
+						//Carry flag    : Not affected
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+					end
+					BISB:
+					begin
+						alu_out[7:0] = dest_operand[7:0] | source_operand[7:0] ;
+						//overflow flag : clear
+						//Carry flag    : Not affected
+						//Set Byte operation flag
+						cpu_register.processor_status_word.overflow_flag = 1'b0;
+						byte_op = 1;
+					end
+					ADD:
+					begin
+						{carry_buffer,alu_out} = dest_operand + source_operand ;
+
+						// Overflow flag : set if there was arithmetic overflow as a result of the operation; that is 
+						//					both operands were of the same sign and the result was of the opposite sign; cleared otherwise
+						if((source_operand[15] == dest_operand[15])&&( dest_operand[15] != alu_out[15]))
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+
+						// Carry flag: cleared if there was a carry from the
+						//				most significant bit of the result; set otherwise
+						if (carry_buffer == 1'b1)
+						begin
+							cpu_register.processor_status_word.carry_bit = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.carry_bit = 1'b0;
+						end
+					end
+					SUB:
+					begin
+						{carry_buffer,alu_out} = dest_operand - source_operand ;
+
+						//Overflow flag : set if there was arithmetic overflow as a result of the operation; that is, if
+						//					the operands were of opposite signs and the sign of the source was the same as the sign of the result; cleared otherwise
+						if((source_operand[15] != dest_operand[15])&&( source_operand[15] == alu_out[15]))
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.overflow_flag = 1'b0;
+						end
+
+						// Carry flag: cleared if there was a carry from the
+						//				most significant bit of the result; set otherwise (indicating borrow required)	
+						if (carry_buffer == 1'b1)
+						begin
+							cpu_register.processor_status_word.carry_bit = 1'b1;
+						end
+						else
+						begin
+							cpu_register.processor_status_word.carry_bit = 1'b0;
+						end
+					end
+				endcase
+
+				//Negative flag : set if the result is < 0; cleared otherwise
+				//Zero flag : set if result = 0; cleared otherwise
+				if (byte_op == 1)
+				begin
+					if (alu_out[7:0] == 8'b0)
+					begin
+						cpu_register.processor_status_word.zero_flag = 1'b1;
+					end
+					else
+					begin
+						cpu_register.processor_status_word.zero_flag = 1'b0;
+					end
+
+					if (alu_out[7] == 1'b1)
+					begin
+						cpu_register.processor_status_word.neg_value = 1'b1;
+					end
+					else
+					begin
+						cpu_register.processor_status_word.neg_value = 1'b0;
+					end
+					byte_op = 0;
+				end
+				else 
+				begin
+					if (alu_out == 16'b0)
+					begin
+						cpu_register.processor_status_word.zero_flag = 1'b1;
+					end
+					else
+					begin
+						cpu_register.processor_status_word.zero_flag = 1'b0;
+					end
+
+					if (alu_out[15] == 1'b1)
+					begin
+						cpu_register.processor_status_word.neg_value = 1'b1;
+					end
+					else
+					begin
+						cpu_register.processor_status_word.neg_value = 1'b0;
+					end
+				end
+			end
+			/*
+			else
+			begin 														//conditional branch operations
+				buffer.branch_addr[3] = imm_offset + cpu_register.program_counter;
+				//case (instruction.instruction_c.opcode)
+			end
+			*/
+		end
+
+		MEM_WRITE:
+		begin
+			if(instruction_type == SINGLE_OPERAND)
+			begin
+				$display("SI DEST RESULT=%d",alu_out);
+				$display("SI DEST ADDRESS=%d",dest_operand_addr);
+				$display("SI DEST REG=%d",dest_operand_reg);
+				if(reg_mem == 1'b0)
+				begin
+					if(byte_word == 1'b1)
+					begin
+						cpu_register.register[dest_operand_reg][7:0] = alu_out[7:0];
+					end
+					else
+					begin
+						cpu_register.register[dest_operand_reg][15:8] = alu_out[15:8];
+						cpu_register.register[dest_operand_reg][7:0] = alu_out[7:0];
+					end
+				end
+				else
+				begin
+					if(byte_word == 1'b1)
+					begin
+						memory.flash[dest_operand_addr] = alu_out[7:0];
+					end
+					else
+					begin
+						memory.flash[dest_operand_addr] = alu_out[15:8];
+						memory.flash[dest_operand_addr+16'd1] = alu_out[7:0];
+					end
+				end
+				if(pc_add == 1'b1)
+				begin
+					cpu_register.program_counter = cpu_register.program_counter + 4;
+					$display("S IF PC=%d",cpu_register.program_counter);
+					
+				end
+				else
+				begin
+					cpu_register.program_counter = cpu_register.program_counter + 2;
+					$display("S ELSE PC=%d",cpu_register.program_counter);
+				end
+
+			end
+			/*
+			else if(instruction_type == DOUBLE_OPERAND_2)
+			begin
+				cpu_register.program_counter = cpu_register.program_counter + 2;
+				$display("PC=%d",cpu_register.program_counter);
+			end
+			else if(instruction_type == DOUBLE_OPERAND_1)
+			begin
+			end
+				cpu_register.program_counter = cpu_register.program_counter + 2;
+				$display("PC=%d",cpu_register.program_counter);
+			*/
+			else
+			begin
+				//update the value of program counter here
+				cpu_register.program_counter = cpu_register.program_counter + 2;
+				$display("PC=%d",cpu_register.program_counter);
+			end
+		end
+
+		CHECK_END_OF_CODE:
+		begin
+			//do nothing
+		end
+
+		SM_DONE:
+		begin
+			doneEXE = 1'b1;
+		end
+
+		default:
+		begin
+			//do nothing
+		end
+	endcase // p_state 
 end
 
 endmodule

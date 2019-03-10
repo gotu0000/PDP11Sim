@@ -1,110 +1,109 @@
 import parameters::*;
+
+//top module for PDPD11
 module top ();
 
+//name of ascii file to read
 string filename;
-int symbol;
-logic [15:0] PC;
+//file descriptor for ascii file
 int fd;
+//symbol to be stored in this variable
+int symbol;
+logic [15:0] fileLine;
+logic [15:0] fileLineRet;
 
-int i =0;
+logic [15:0] memWrCounter = 0;
+logic [15:0] memWrLast = 0;
+logic [15:0] dataOffset;
+logic [15:0] initPC;
+
 logic clock;
+logic reset;
+logic doneEXE;
 
-test t1();
-pdp_isa ins (.clock(clock));
-
+//module instantiation of pdp_11 ISA
+pdp_isa ins (.clock(clock),.reset(reset),.pCStart(dataOffset + initPC),.pCEnd(memWrLast),.doneEXE(doneEXE));
 
 initial begin
 	clock = 1'b0;
 	forever #10 clock = ~clock;
 end
 
-initial begin
-	if ($value$plusargs("FILE=%s", filename) == 1);
+initial 
+begin
+	reset = 1'b1;
+	//check for the passed argument
+	if ($value$plusargs("FILE=%s", filename) == 1)
 	begin
+		//open the file
 		fd = $fopen(filename,"r");
-		if (fd == 0) begin
-			$display("Simulation stopped. \n File not found!");
+		//if file not found
+		if (fd == 0) 
+		begin
+			$display("Simulation stopped.\n");
+			$display("File not found!\n");
 			$stop;
 		end
-		while(!$feof(fd)) begin
-			
-			//if($fscanf(fd, "%s" , symbol) == 1)
+		while(!$feof(fd)) 
+		begin
 			symbol = $fgetc(fd);
 			begin
 				if (symbol == "*")
 				begin
 					$display("* detected");
-					PC = $fscanf(fd, "%o ", ins.PC1);
-					//$display("PC= %d %o %h %b 	PC1= %b %o",PC,PC,PC,PC, PC1, PC1);
-					// PC = $fscanf(fd, "%d ", PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %b ",PC,PC,PC,PC, PC1);
-					// PC = $fscanf(fd, "%d ", PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %b ",PC,PC,PC,PC, PC1);
-					// PC = $fscanf(fd, "%d ", PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %b ",PC,PC,PC,PC, PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %b ",PC,PC,PC,PC, PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %b ",PC,PC,PC,PC, PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %b ",PC,PC,PC,PC, PC1);
+					fileLineRet = $fscanf(fd, "%o ", fileLine);
+					$display("SUCCESS=%d:%06o",fileLineRet,fileLine);
+					dataOffset = fileLine;
+					$display("Data Offset=%d",dataOffset);
 				end
 				else if (symbol == "@")
 				begin
 					$display("@ detected");
-					PC = $fscanf(fd, "%o ", PC);
-					//$display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					;
-					// PC = $fscanf(fd, "%d ", PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					// PC = $fscanf(fd, "%d ", PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					// PC = $fscanf(fd, "%d ", PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
+					fileLineRet = $fscanf(fd, "%o ", fileLine);
+					$display("SUCCESS=%d:%06o",fileLineRet,fileLine);
+					initPC = fileLine;
+					$display("Init PC=%d",initPC);
 				end
 				else if (symbol == "-")
 				begin
 					$display("- detected");
-					
-					PC = $fscanf(fd, "%o ", {memory.flash[i], memory.flash[i+1]});
-					$display("memory[%d] = %6o ",i,{memory.flash[i],memory.flash[i+1]});
-					i = i+2;
-					//$display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					// PC = $fscanf(fd, "%d ", PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					// PC = $fscanf(fd, "%d ", PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					// PC = $fscanf(fd, "%d ", PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);					//PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %d %o %h %b ",PC,PC,PC,PC, PC1, PC1, PC1, PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %b ",PC,PC,PC,PC, PC1);
-					// //PC = $fgetc(fd);
-					// $display("PC= %d %o %h %b 	PC1= %b ",PC,PC,PC,PC, PC1);
+					fileLineRet = $fscanf(fd, "%o ", {memory.flash[memWrCounter], memory.flash[memWrCounter+1]});
+					fileLine = {memory.flash[memWrCounter], memory.flash[memWrCounter+1]};
+					$display("SUCCESS=%d:%06o",fileLineRet,fileLine);
+					/*
+					//write into memory
+					memory.flash[memWrCounter] = fileLine[15:8];
+					memory.flash[memWrCounter+1] = fileLine[7:0];
+					*/
+					memWrCounter = memWrCounter + 2;
 				end
 				else 
+				begin
 					$display("Symbol not found");
+				end
 			end
 		end
 	end
+	#100
+	//get max value of memWrCounter 
+	memWrLast = memWrCounter;
+	reset = 1'b0;
+	$display("Starting Simulation");
+	// #100000
+	// $display("Goodbye Cruel World");
+	// $stop;
 end
 
-//initial
-//begin
-//end
+
+//always block will stop the simulation
+always@(doneEXE)
+begin
+	if(doneEXE == 1'b1)
+	begin
+		$display("Goodbye Cruel World");
+		$stop;
+	end
+end
+
+
 endmodule // top
