@@ -1,6 +1,27 @@
 #to get the file from local machine to machine which has faust's assembler
 scp test.mac jcharla@linux.cecs.pdx.edu:/u/jcharla/ECE586/
+scp test_si.mac jcharla@linux.cecs.pdx.edu:/u/jcharla/ECE586/
 #to get the ascii file to local machine
 scp jcharla@linux.cecs.pdx.edu:/u/jcharla/ECE586/test.ascii .
+scp jcharla@linux.cecs.pdx.edu:/u/jcharla/ECE586/Makefile .
 #to transfer the file from local machine to redhat machine 
+
+#to login and make
+ssh jcharla@linux.cecs.pdx.edu
+cd ECE586/
+make clean
+make full
+
+
+
+ssh jcharla@redhat.ece.pdx.edu
+
+cd ~/PDX/ECE586/PDP11Sim/
+
 scp test.ascii jcharla@redhat.ece.pdx.edu:/u/jcharla/PDP11Sim/
+scp parameters.sv jcharla@redhat.ece.pdx.edu:/u/jcharla/PDP11Sim/
+scp pdp_isa.sv jcharla@redhat.ece.pdx.edu:/u/jcharla/PDP11Sim/
+scp test.sv jcharla@redhat.ece.pdx.edu:/u/jcharla/PDP11Sim/
+scp pdp_11_const.vh jcharla@redhat.ece.pdx.edu:/u/jcharla/PDP11Sim/
+scp top.sv jcharla@redhat.ece.pdx.edu:/u/jcharla/PDP11Sim/
+scp Makefile jcharla@redhat.ece.pdx.edu:/u/jcharla/PDP11Sim/

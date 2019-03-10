@@ -187,7 +187,7 @@ union packed {
 
 typedef enum {TRUE, FALSE} bool_t;
 bool_t halt;									//halts the pipeline when branch instruction occurs
-bool_t branch_taken;							//indicates if branch is taken
+
 
 //instruction type
 typedef enum logic [1:0] {

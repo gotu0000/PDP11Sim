@@ -37,7 +37,10 @@ logic [15:0] alu_out;
 logic [15:0] alu_out_lsb;
 //incase of branch store address over here
 logic [15:0] branch_addr;
-
+//calculate address from here
+logic [5:0] branch_addr_offset;
+//decide whether to take a branch or not
+logic branch_taken;
 instruction_type_t instruction_type;
 
 logic carry_buffer;
@@ -142,7 +145,8 @@ begin
 			end
 			else if (instruction.instruction_x[14:11] == HARD_CODED_COND_BRANCHES_BITS)
 			begin
-				instruction_type = CONDITIONAL_BRANCH; 
+				instruction_type = CONDITIONAL_BRANCH;
+				branch_addr_offset = instruction.instruction_c.offset; 
 			end
 			else if (instruction.instruction_x[15:12] == MULTIPLY_INSTRUCTIONS) 
 			begin
@@ -990,13 +994,21 @@ begin
 					end
 				end
 			end
-			/*
-			else
-			begin 														//conditional branch operations
-				buffer.branch_addr[3] = imm_offset + cpu_register.program_counter;
-				//case (instruction.instruction_c.opcode)
+			//conditional branch operations
+			else if (instruction_type == CONDITIONAL_BRANCH)
+			begin 														
+				case (instruction.instruction_c.opcode)							//other ALU instructions
+					//compute this from offset value
+					//add code here for branching
+					//TODO do this for all the instructions
+					BR:
+					begin
+ 						branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+ 						//always branch
+ 						branch_taken = 1'b1;
+					end
+				endcase
 			end
-			*/
 		end
 
 		MEM_WRITE:
@@ -1055,7 +1067,20 @@ begin
 				cpu_register.program_counter = cpu_register.program_counter + 2;
 				$display("PC=%d",cpu_register.program_counter);
 			*/
-			else
+			else if(instruction_type == CONDITIONAL_BRANCH)
+			begin
+				if(branch_taken == 1'b1)
+				begin
+					cpu_register.program_counter = branch_addr;
+					$display("PC=%d",cpu_register.program_counter);
+				end
+				else
+				begin
+					cpu_register.program_counter = cpu_register.program_counter + 2;
+					$display("PC=%d",cpu_register.program_counter);
+				end
+			end
+			else 
 			begin
 				//update the value of program counter here
 				cpu_register.program_counter = cpu_register.program_counter + 2;
