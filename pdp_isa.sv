@@ -68,8 +68,15 @@ begin
 	case (p_state)
 		SM_RESET: 				n_state = UPDATE_INIT_PC;
 		UPDATE_INIT_PC: 		n_state = INSTRUCTION_FETCH;
-		INSTRUCTION_FETCH: 		n_state = INSTRUCTION_DECODE;
-		INSTRUCTION_DECODE: 	n_state = INSTRUCTION_EXECUTE;
+		INSTRUCTION_FETCH: 		n_state = INSTRUCTION_HALT_CHECK;
+		INSTRUCTION_HALT_CHECK:
+		begin
+			if (($isunknown(instruction.instruction_x))||(instruction.instruction_x == 16'b0))
+				n_state = SM_DONE;
+			else
+				n_state = INSTRUCTION_DECODE;
+		end 
+		INSTRUCTION_DECODE:		n_state = INSTRUCTION_EXECUTE;
 		INSTRUCTION_EXECUTE: 	n_state = MEM_WRITE;
 		MEM_WRITE: 				n_state = CHECK_END_OF_CODE;
 		CHECK_END_OF_CODE:

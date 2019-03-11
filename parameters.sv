@@ -374,6 +374,7 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode,
 				ret_val[32:16] = {1'b1,memory.flash[temp_program_counter+16'd2],
 									memory.flash[temp_program_counter+16'd3]};
 
+				trace_file_write(0,temp_program_counter+16'd2);
 				addr_of_addr = ret_val[31:16];
 
 				ret_val[15:8] = memory.flash[addr_of_addr];
@@ -519,6 +520,7 @@ typedef enum {
 		SM_RESET
 		, UPDATE_INIT_PC
 		, INSTRUCTION_FETCH
+		, INSTRUCTION_HALT_CHECK
 		, INSTRUCTION_DECODE
 		, INSTRUCTION_EXECUTE
 		, MEM_WRITE
@@ -536,7 +538,7 @@ function automatic void open_trace_file_to_write();
 endfunction : open_trace_file_to_write
 
 function automatic void trace_file_write(logic [1:0] accessType, logic [15:0] memAddr);
-	$fwrite(fd_trace, "%d \t %04o\n", accessType, memAddr);
+	$fwrite(fd_trace, "%d \t %06o\n", accessType, memAddr);
 endfunction : trace_file_write
 
 //call this at the end
