@@ -22,7 +22,7 @@ logic reset;
 logic doneEXE;
 
 //module instantiation of pdp_11 ISA
-pdp_isa ins (.clock(clock),.reset(reset),.pCStart(dataOffset + initPC),.pCEnd(memWrLast),.doneEXE(doneEXE));
+pdp_isa ins (.clock(clock),.reset(reset),.pCStart(dataOffset),.pCEnd(memWrLast),.doneEXE(doneEXE));
 
 initial begin
 	clock = 1'b0;
@@ -68,8 +68,8 @@ begin
 				else if (symbol == "-")
 				begin
 					$display("- detected");
-					fileLineRet = $fscanf(fd, "%o ", {memory.flash[memWrCounter], memory.flash[memWrCounter+1]});
-					fileLine = {memory.flash[memWrCounter], memory.flash[memWrCounter+1]};
+					fileLineRet = $fscanf(fd, "%o ", {memory.flash[memWrCounter+initPC], memory.flash[memWrCounter+1+initPC]});
+					fileLine = {memory.flash[memWrCounter+initPC], memory.flash[memWrCounter+1+initPC]};
 					$display("SUCCESS=%d:%06o",fileLineRet,fileLine);
 					/*
 					//write into memory
