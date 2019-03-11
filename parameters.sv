@@ -207,9 +207,9 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode,
 	logic [34:0] ret_val = 0;
 	logic [15:0] x_op = 0;
 	logic [15:0] addr_of_addr = 0;
-	$display("SIO MODE=%d",reg_mode);
-	$display("SIO REG_NUM=%d",reg_number);
-	$display("SIO ACC_TYPE=%d",acc_type);
+	// $display("SIO MODE=%d",reg_mode);
+	// $display("SIO REG_NUM=%d",reg_number);
+	// $display("SIO ACC_TYPE=%d",acc_type);
 	
 	if(reg_number < 3'b110)
 	begin
@@ -453,214 +453,66 @@ endfunction : single_operand_get
 //16 bit for source operand
 function automatic logic [50:0] double_operand_get(logic [2:0] s_reg_mode, logic [2:0] s_reg_number,logic [2:0] d_reg_mode, logic [2:0] d_reg_number, logic acc_type);
 	logic [50:0] ret_val = 0;
-	/*
 
-	logic [15:0] x_op_s = 0;
-	logic [15:0] addr_s = 0;
-	logic [15:0] addr_of_addr_s = 0;
-	logic [15:0] x_op_d = 0;
-	logic [15:0] addr_d = 0;
-	logic [15:0] addr_of_addr_d = 0;
+	logic [34:0] ret_temp_1;
+	logic [34:0] ret_temp_2;
 
-	//source and destination are PC
-	if((s_reg_number == 3'b111) && (d_reg_number == 3'b111))
+	if((s_reg_mode > 3'b101)||(s_reg_number == 3'b111))
 	begin
-		//add by 6
-		ret_val[50:49] = 2'b10;
-		ret_val[48] = 1'b1;		
-		unique case (s_reg_mode)	//decode addressing mode
+		ret_temp_1 = single_operand_get(s_reg_mode,s_reg_number,acc_type,cpu_register.program_counter);
+		ret_temp_2 = single_operand_get(d_reg_mode,d_reg_number,acc_type,cpu_register.program_counter+16'd2);
+		if((d_reg_mode > 3'b101)||(d_reg_number))
+		begin
+			//PC+6
+			ret_val[50:49] = 2'b10;
+			ret_val[48] = ret_temp_2[32];
+			ret_val[47:16] = ret_temp_2[31:0];
+			ret_val[15:0] = ret_temp_1[15:0];
+		end
+		else
+		begin
+			//PC+4
+			ret_val[50:49] = 2'b01;
+			ret_val[48] = ret_temp_2[32];
+			ret_val[47:16] = ret_temp_2[31:0];
+			ret_val[15:0] = ret_temp_1[15:0];
+		end
 
-			3'b010:
-			begin
-				x_op_s = {memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
-											};
-				ret_val[15:0] = x_op_s;
-			end
-
-			3'b011:
-			begin
-				x_op_s = {memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
-											};
-				addr_s = x_op_s;
-				ret_val[15:8] = memory.flash[addr_s];
-
-				ret_val[7:0] = memory.flash[addr_s+16'd1];
-			end
-
-			3'b110:
-			begin
-				x_op_s = {memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
-											};
-				addr_s = cpu_register.program_counter+16'd4+x_op_s;
-				ret_val[15:8] = memory.flash[addr_s];
-
-				ret_val[7:0] = memory.flash[addr_s+16'd1];
-			end
-
-			3'b111:
-			begin
-				x_op_s = {memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
-											};
-				addr_s = cpu_register.program_counter+16'd4+x_op_s;
-
-				addr_of_addr_s = {memory.flash[addr_s],memory.flash[addr_s+16'd1]};
-
-				ret_val[15:8] = memory.flash[addr_of_addr_s];
-
-				ret_val[7:0] = memory.flash[addr_of_addr_s+16'd1];
-			end
-
-			default:
-			begin
-				$display("SOMETHING IS WRONG=%d,%d",s_reg_mode,s_reg_number);
-				ret_val = 0;
-			end
-		endcase
-
-		unique case (d_reg_mode)	//decode addressing mode
-
-			3'b010:
-			begin
-				x_op_d = {memory.flash[cpu_register.program_counter+16'd3]
-										,memory.flash[cpu_register.program_counter+16'd4]
-											};
-				ret_val[47:32] = cpu_register.program_counter+16'd3;
-				ret_val[31:16] = x_op_d;
-			end
-
-			3'b011:
-			begin
-				x_op_d = {memory.flash[cpu_register.program_counter+16'd3]
-										,memory.flash[cpu_register.program_counter+16'd4]
-											};
-				addr_d = x_op_d;
-				ret_val[47:32] = addr_d;
-				ret_val[31:24] = memory.flash[addr_d];
-
-				ret_val[23:16] = memory.flash[addr_d+16'd1];
-			end
-
-			3'b110:
-			begin
-				x_op_d = {memory.flash[cpu_register.program_counter+16'd3]
-										,memory.flash[cpu_register.program_counter+16'd4]
-											};
-				addr_d = cpu_register.program_counter+16'd6+x_op_d;
-				ret_val[47:32] = addr_d;
-				ret_val[31:24] = memory.flash[addr_d];
-
-				ret_val[23:16] = memory.flash[addr_d+16'd1];
-			end
-
-			3'b111:
-			begin
-				x_op_d = {memory.flash[cpu_register.program_counter+16'd3]
-										,memory.flash[cpu_register.program_counter+16'd4]
-											};
-				addr_d = cpu_register.program_counter+16'd6+x_op_d;
-
-				addr_of_addr_d = {memory.flash[addr_d],memory.flash[addr_d+16'd1]};
-
-				ret_val[47:32] = addr_of_addr_d;
-				ret_val[31:24] = memory.flash[addr_of_addr_d];
-
-				ret_val[23:16] = memory.flash[addr_of_addr_d+16'd1];
-			end
-
-			default:
-			begin
-				$display("SOMETHING IS WRONG=%d,%d",d_reg_mode,d_reg_number);
-				ret_val = 0;
-			end
-		endcase
-	end
-	else if((s_reg_number == 3'b111) && (d_reg_number < 3'b110))
-	begin
-		unique case (s_reg_mode)	//decode addressing mode
-
-			3'b010:
-			begin
-				x_op_s = {memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
-											};
-				ret_val[15:0] = x_op_s;
-			end
-
-			3'b011:
-			begin
-				x_op_s = {memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
-											};
-				addr_s = x_op_s;
-				ret_val[15:8] = memory.flash[addr_s];
-
-				ret_val[7:0] = memory.flash[addr_s+16'd1];
-			end
-
-			3'b110:
-			begin
-				x_op_s = {memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
-											};
-				addr_s = cpu_register.program_counter+16'd4+x_op_s;
-				ret_val[15:8] = memory.flash[addr_s];
-
-				ret_val[7:0] = memory.flash[addr_s+16'd1];
-			end
-
-			3'b111:
-			begin
-				x_op_s = {memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
-											};
-				addr_s = cpu_register.program_counter+16'd4+x_op_s;
-
-				addr_of_addr_s = {memory.flash[addr_s],memory.flash[addr_s+16'd1]};
-
-				ret_val[15:8] = memory.flash[addr_of_addr_s];
-
-				ret_val[7:0] = memory.flash[addr_of_addr_s+16'd1];
-			end
-
-			default:
-			begin
-				$display("SOMETHING IS WRONG=%d,%d",s_reg_mode,s_reg_number);
-				ret_val = 0;
-			end
-		endcase
-
-		unique case (d_reg_mode)	//decode addressing mode
-
-			3'b001:
-			begin
-
-				ret_val[47:32] = cpu_register.program_counter+16'd3;
-				ret_val[31:16] = cpu_register.program_counter[d_reg_number];
-			end
-
-			default:
-			begin
-				$display("SOMETHING IS WRONG=%d,%d",d_reg_mode,d_reg_number);
-				ret_val = 0;
-			end
-		endcase
-
-	end
-	else if((s_reg_number < 3'b110) && (d_reg_number == 3'b111))
-	begin
-		//
 	end
 	else
 	begin
-		//
+		ret_temp_1 = single_operand_get(s_reg_mode,s_reg_number,acc_type,cpu_register.program_counter);
+		ret_temp_2 = single_operand_get(d_reg_mode,d_reg_number,acc_type,cpu_register.program_counter);
+		if((d_reg_mode > 3'b101)||(d_reg_number == 3'b111))
+		begin
+			//PC+4
+			ret_val[50:49] = 2'b01;
+			ret_val[48] = ret_temp_2[32];
+			ret_val[47:16] = ret_temp_2[31:0];
+			ret_val[15:0] = ret_temp_1[15:0];
+		end
+		else
+		begin
+			//PC+2
+			ret_val[50:49] = 2'b00;
+			ret_val[48] = ret_temp_2[32];
+			ret_val[47:16] = ret_temp_2[31:0];
+			ret_val[15:0] = ret_temp_1[15:0];
+		end
 	end
-	*/
 	return ret_val;
 endfunction : double_operand_get
+
+//1bit for relative
+//1bits PC increment
+//1 bit mem or reg
+//16 bit for dest address
+//16 bit for destination operand
+function automatic logic [34:0] double_operand_get_mult(logic [2:0] d_reg_mode, logic [2:0] d_reg_number);
+	logic [34:0] ret_val = 0;
+	ret_val = single_operand_get(d_reg_mode,d_reg_number,0,cpu_register.program_counter);
+	return ret_val;
+endfunction : double_operand_get_mult
 
 //states for FSM
 typedef enum {

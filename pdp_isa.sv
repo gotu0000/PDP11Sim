@@ -18,6 +18,7 @@ logic [2:0] reg_dest;
 logic byte_word;
 //ret value of single instruction
 logic [34:0] single_inst_ret;
+logic [34:0] double_inst_ret_mult;
 logic [50:0] double_inst_ret;
 
 //source operand should be fetched in this
@@ -26,6 +27,7 @@ logic [15:0] dest_operand;
 logic pc_relative;
 logic reg_mem;
 logic pc_add;
+logic [1:0] pc_add_db;
 //register number in which i want to store
 logic [2:0] dest_operand_reg;
 //address of destination in which
@@ -96,19 +98,19 @@ begin
 
 		UPDATE_INIT_PC:
 		begin
-			// cpu_register.register[0] = 16'd0;
-			// cpu_register.register[1] = 16'd0;
-			// cpu_register.register[2] = 16'd0;
-			// cpu_register.register[3] = 16'd0;
-			// cpu_register.register[4] = 16'd0;
-			// cpu_register.register[5] = 16'd0;
+			cpu_register.register[0] = 16'd0;
+			cpu_register.register[1] = 16'd0;
+			cpu_register.register[2] = 16'd0;
+			cpu_register.register[3] = 16'd0;
+			cpu_register.register[4] = 16'd0;
+			cpu_register.register[5] = 16'd0;
 
-			cpu_register.register[0] = 16'o000014;
-			cpu_register.register[1] = 16'o000002;
-			cpu_register.register[2] = 16'o000004;
-			cpu_register.register[3] = 16'o000012;
-			cpu_register.register[4] = 16'o000010;
-			cpu_register.register[5] = 16'o000020;
+			// cpu_register.register[0] = 16'o000014;
+			// cpu_register.register[1] = 16'o000002;
+			// cpu_register.register[2] = 16'o000004;
+			// cpu_register.register[3] = 16'o000012;
+			// cpu_register.register[4] = 16'o000010;
+			// cpu_register.register[5] = 16'o000020;
 			cpu_register.program_counter = pCStart;
 		end
 
@@ -151,11 +153,56 @@ begin
 			end
 			else if (instruction.instruction_x[15:12] == MULTIPLY_INSTRUCTIONS) 
 			begin
-				instruction_type = DOUBLE_OPERAND_2;					
+				instruction_type = DOUBLE_OPERAND_2;
+				
+				reg_source_mode = instruction.instruction_d_2.mode; 
+				reg_source = instruction.instruction_d_2.src_dest;
+				source_operand = cpu_register.register[instruction.instruction_d_2.reg_op];
+				dest_operand_reg = instruction.instruction_d_2.reg_op;
+
+				double_inst_ret_mult = double_operand_get_mult(reg_source_mode,reg_source);
+				dest_operand = double_inst_ret_mult[15:0];
+				dest_operand_addr = double_inst_ret_mult[31:16];
+
+				if(instruction.instruction_d_2.opcode != XOR)
+				begin
+					dest_operand_reg = instruction.instruction_d_2.reg_op;
+				end
+				else
+				begin
+					dest_operand_reg = reg_source;
+				end
+
+				reg_mem = double_inst_ret_mult[32];
+				pc_add = double_inst_ret_mult[33];
+				pc_relative = double_inst_ret_mult[34];
+				
+				$display("DI2 SOURCE OPERAND=%d",source_operand);
+				$display("DI2 DEST OPERAND=%d",dest_operand);
+				$display("DI2 DEST ADDRESS=%d",dest_operand_addr);
+				$display("DI2 DEST REG=%d",dest_operand_reg);
 			end
 			else 
 			begin
 				instruction_type = DOUBLE_OPERAND_1; 
+				reg_source_mode = instruction.instruction_d_1.mode_src; 
+				reg_source = instruction.instruction_d_1.src;
+				reg_dest_mode = instruction.instruction_d_1.mode_dest; 
+				reg_dest = instruction.instruction_d_1.dest;
+				byte_word = instruction.instruction_d_1[15];
+				double_inst_ret = double_operand_get(
+					reg_source_mode,reg_source,reg_dest_mode,reg_dest,byte_word);
+				pc_add_db = double_inst_ret[50:49];
+				reg_mem = double_inst_ret[48];
+				dest_operand_addr = double_inst_ret[47:32];
+				dest_operand = double_inst_ret[31:16];
+				source_operand = double_inst_ret[15:0];
+				dest_operand_reg = reg_dest;
+
+				$display("DI1 SOURCE OPERAND=%d",source_operand);
+				$display("DI1 DEST OPERAND=%d",dest_operand);
+				$display("DI1 DEST ADDRESS=%d",dest_operand_addr);
+				$display("DI1 DEST REG=%d",dest_operand_reg);
 			end
 		end
 
@@ -1228,18 +1275,91 @@ begin
 					$display("SELSE PC=%d",cpu_register.program_counter);
 				end
 			end
-			/*
 			else if(instruction_type == DOUBLE_OPERAND_2)
 			begin
-				cpu_register.program_counter = cpu_register.program_counter + 2;
-				$display("PC=%d",cpu_register.program_counter);
+
+
+				if(instruction.instruction_d_2.opcode != XOR)
+				begin
+					cpu_register.register[dest_operand_reg][15:8] = alu_out[15:8];
+					cpu_register.register[dest_operand_reg][7:0] = alu_out[7:0];
+
+					cpu_register.register[dest_operand_reg+3'd1][15:8] = alu_out_lsb[15:8];
+					cpu_register.register[dest_operand_reg+3'd1][7:0] = alu_out_lsb[7:0];
+				end
+				else
+				begin
+					if(reg_mem == 1'b0)
+					begin
+						cpu_register.register[dest_operand_reg][15:8] = alu_out[15:8];
+						cpu_register.register[dest_operand_reg][7:0] = alu_out[7:0];
+					end
+					else
+					begin
+						memory.flash[dest_operand_addr] = alu_out[15:8];
+						memory.flash[dest_operand_addr+16'd1] = alu_out[7:0];
+					end
+				end
+
+
+				if(pc_add == 1'b1)
+				begin
+					cpu_register.program_counter = cpu_register.program_counter + 4;
+					$display("DI2 PC=%d",cpu_register.program_counter);
+				end
+				else
+				begin
+					cpu_register.program_counter = cpu_register.program_counter + 2;
+					$display("DI2 PC=%d",cpu_register.program_counter);
+				end
 			end
 			else if(instruction_type == DOUBLE_OPERAND_1)
 			begin
-				cpu_register.program_counter = cpu_register.program_counter + 2;
-				$display("PC=%d",cpu_register.program_counter);
+				$display("DI1 RESULT=%d",alu_out);
+				$display("DI1 ADDRESS=%d",dest_operand_addr);
+				$display("DI1 REG=%d",dest_operand_reg);
+				if(reg_mem == 1'b0)
+				begin
+					if(byte_word == 1'b1)
+					begin
+						cpu_register.register[dest_operand_reg][7:0] = alu_out[7:0];
+					end
+					else
+					begin
+						cpu_register.register[dest_operand_reg][15:8] = alu_out[15:8];
+						cpu_register.register[dest_operand_reg][7:0] = alu_out[7:0];
+					end
+				end
+				else
+				begin
+					if(byte_word == 1'b1)
+					begin
+						memory.flash[dest_operand_addr] = alu_out[7:0];
+					end
+					else
+					begin
+						memory.flash[dest_operand_addr] = alu_out[15:8];
+						memory.flash[dest_operand_addr+16'd1] = alu_out[7:0];
+					end
+				end
+
+				if(pc_add_db == 2'b00)
+				begin
+					cpu_register.program_counter = cpu_register.program_counter + 16'd2;
+					$display("DI1PC=%d",cpu_register.program_counter);
+				end
+				else if
+				(pc_add_db == 2'b01)
+				begin
+					cpu_register.program_counter = cpu_register.program_counter + 16'd4;
+					$display("DI1PC=%d",cpu_register.program_counter);
+				end
+				else
+				begin
+					cpu_register.program_counter = cpu_register.program_counter + 16'd6;
+					$display("DI1PC=%d",cpu_register.program_counter);
+				end
 			end
-			*/
 			else if(instruction_type == CONDITIONAL_BRANCH)
 			begin
 				if(branch_taken == 1'b1)
@@ -1249,14 +1369,14 @@ begin
 				end
 				else
 				begin
-					cpu_register.program_counter = cpu_register.program_counter + 2;
+					cpu_register.program_counter = cpu_register.program_counter + 16'd2;
 					$display("BNT PC=%d",cpu_register.program_counter);
 				end
 			end
 			else 
 			begin
 				//update the value of program counter here
-				cpu_register.program_counter = cpu_register.program_counter + 2;
+				cpu_register.program_counter = cpu_register.program_counter + 16'd2;
 				$display("PC=%d",cpu_register.program_counter);
 			end
 		end
