@@ -116,7 +116,7 @@ begin
 		begin
 			instruction.instruction_x = {memory.flash[cpu_register.program_counter]
 									, memory.flash[cpu_register.program_counter + 1'b1]};
-			
+
 		end
 
 		INSTRUCTION_DECODE:
@@ -132,7 +132,7 @@ begin
 				reg_source = instruction.instruction_s.dest;
 				byte_word = instruction.instruction_s[15];
 				//will make changes in the register and fetch the operator
-				single_inst_ret = single_operand_get(reg_source_mode,reg_source,byte_word);
+				single_inst_ret = single_operand_get(reg_source_mode,reg_source,byte_word,cpu_register.program_counter);
 				//extract values
 				source_operand = single_inst_ret[15:0];
 				dest_operand_addr = single_inst_ret[31:16];

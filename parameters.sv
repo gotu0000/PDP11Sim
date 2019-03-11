@@ -202,7 +202,8 @@ typedef enum logic [1:0] {
 //one bit for pc relative
 //one bit for PC+2,PC+4,if not pc relative
 //one bit for reg/memory, useful while writing back
-function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [2:0] reg_number, logic acc_type);
+function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, 
+						logic [2:0] reg_number, logic acc_type, logic [15:0] temp_program_counter);
 	logic [34:0] ret_val = 0;
 	logic [15:0] x_op = 0;
 	logic [15:0] addr_of_addr = 0;
@@ -234,6 +235,7 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 				//mem[R] contains operand
 				ret_val[15:8] = memory.flash[cpu_register.register[reg_number]];
 				ret_val[7:0] = memory.flash[cpu_register.register[reg_number]+16'd1]; 
+				trace_file_write (0,cpu_register.register[reg_number]);
 			end
 
 			3'b010:
@@ -246,6 +248,7 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 					ret_val[32:16] = {1'b1,(cpu_register.register[reg_number]-16'd1)};
 					ret_val[15:8] = 8'b0;
 					ret_val[7:0] = memory.flash[(cpu_register.register[reg_number]-16'd1)];
+					trace_file_write (0,cpu_register.register[reg_number]-16'd1);
 				end
 				else
 				begin
@@ -253,6 +256,7 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 					ret_val[32:16] = {1'b1,(cpu_register.register[reg_number]-16'd2)};
 					ret_val[15:8] = memory.flash[cpu_register.register[reg_number]-16'd2];
 					ret_val[7:0] = memory.flash[cpu_register.register[reg_number]-16'd1];
+					trace_file_write (0,ret_val[31:16]);
 				end
 			end
 
@@ -268,6 +272,7 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 
 				ret_val[15:8] = memory.flash[addr_of_addr];
 				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+				trace_file_write(0,addr_of_addr);
 			end
 
 			3'b100:
@@ -280,6 +285,7 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 					ret_val[32:16] = {1'b1,(cpu_register.register[reg_number])};
 					ret_val[15:8] = 8'b0;
 					ret_val[7:0] = memory.flash[cpu_register.register[reg_number]];
+					trace_file_write(0,ret_val[31:16]);
 				end
 				else
 				begin
@@ -287,6 +293,7 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 					ret_val[32:16] = {1'b1,(cpu_register.register[reg_number])};
 					ret_val[15:8] = memory.flash[cpu_register.register[reg_number]];
 					ret_val[7:0] = memory.flash[cpu_register.register[reg_number]+16'd1];
+					trace_file_write(0,ret_val[31:16]);
 				end
 			end
 
@@ -299,27 +306,30 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 				addr_of_addr = ret_val[31:16];
 				ret_val[15:8] = memory.flash[addr_of_addr];
 				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+				trace_file_write(0,ret_val[31:16]);
 			end
 
 			3'b110:
 			begin
 				//PC + 4
 				ret_val[33] = 1'b1;
-				x_op = {memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]};
+				x_op = {memory.flash[temp_program_counter+16'd2]
+										,memory.flash[temp_program_counter+16'd3]};
+				trace_file_write(0,temp_program_counter+16'd2);
 				ret_val[32:16] = {1'b1,(cpu_register.register[reg_number]+x_op)};
 				addr_of_addr = ret_val[31:16];
 				ret_val[15:8] = memory.flash[addr_of_addr];
 				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+				trace_file_write(0,ret_val[31:16]);
 			end
 
 			3'b111:
 			begin
 				//PC + 4
 				ret_val[33] = 1'b1;
-				x_op = {memory.flash[cpu_register.program_counter+16'd2],memory.flash[cpu_register.program_counter+16'd3]};
+				x_op = {memory.flash[temp_program_counter+16'd2],memory.flash[temp_program_counter+16'd3]};
 				
-
+				trace_file_write(0,temp_program_counter+16'd2);
 				ret_val[32:24] = {1'b1,memory.flash[cpu_register.register[reg_number]+
 										x_op]};
 				ret_val[23:16] = memory.flash[cpu_register.register[reg_number]+
@@ -329,6 +339,7 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 
 				ret_val[15:8] = memory.flash[addr_of_addr];
 				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+				trace_file_write(0,ret_val[31:16]);
 			end
 			
 			default:
@@ -348,55 +359,55 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 
 			3'b010:
 			begin
-				//PC+2
-				ret_val[33] = 1'b0;
-				cpu_register.program_counter = cpu_register.program_counter + 16'd2;
-				ret_val[32:16] = {1'b1,(cpu_register.program_counter)};
-				ret_val[15:0] = {memory.flash[cpu_register.program_counter]
-								,memory.flash[cpu_register.program_counter+16'd1]};
+				//PC+4
+				ret_val[33] = 1'b1;
+				ret_val[32:16] = {1'b1,(temp_program_counter+16'd2)};
+				ret_val[15:0] = {memory.flash[temp_program_counter+16'd2]
+								,memory.flash[temp_program_counter+16'd3]};
+				trace_file_write(0,ret_val[31:16]);
 			end
 
 			3'b011:
 			begin
-				//PC+2
-				ret_val[33] = 1'b0;
-				cpu_register.program_counter = cpu_register.program_counter+16'd2;
-				ret_val[32:16] = {1'b1,memory.flash[cpu_register.program_counter],
-									memory.flash[cpu_register.program_counter+16'd1]};
+				//PC+4
+				ret_val[33] = 1'b1;
+				ret_val[32:16] = {1'b1,memory.flash[temp_program_counter+16'd2],
+									memory.flash[temp_program_counter+16'd3]};
 
 				addr_of_addr = ret_val[31:16];
 
 				ret_val[15:8] = memory.flash[addr_of_addr];
 
 				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+				trace_file_write(0,ret_val[31:16]);
 			end
 
 			3'b110:
 			begin
 				//PC + 4
 				ret_val[33] = 1'b1;
-				ret_val[32:16] = {1'b1,(cpu_register.program_counter+16'd4+
-										{memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
+				ret_val[32:16] = {1'b1,(temp_program_counter+16'd4+
+										{memory.flash[temp_program_counter+16'd2]
+										,memory.flash[temp_program_counter+16'd3]
 											})};
-
+				trace_file_write(0,temp_program_counter+16'd2);
 				addr_of_addr = ret_val[31:16];
 
 				ret_val[15:8] = memory.flash[addr_of_addr];
 
 				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
-
-				// $display("X VAL=%o",({memory.flash[cpu_register.program_counter+16'd2]
-				// 		,memory.flash[cpu_register.program_counter+16'd3]}+
+				trace_file_write(0,ret_val[31:16]);
+				// $display("X VAL=%o",({memory.flash[temp_program_counter+16'd2]
+				// 		,memory.flash[temp_program_counter+16'd3]}+
 				// 		16'd4+
-				// 		cpu_register.program_counter));
+				// 		temp_program_counter));
 
 										
 				// $display("RET VAL=%o_%o_%o_%o_%o_%o PC=%d",ret_val[34],ret_val[33],ret_val[32]
 				// 							,ret_val[31:16]
 				// 							,ret_val[15:8]
 				// 							,ret_val[7:0]
-				// 							,cpu_register.program_counter);
+				// 							,temp_program_counter);
 			end
 
 			3'b111:
@@ -404,21 +415,26 @@ function automatic logic [34:0] single_operand_get(logic [2:0] reg_mode, logic [
 				//PC + 4
 				ret_val[33] = 1'b1;
 
-				ret_val[32:24] = {1'b1,memory.flash[(cpu_register.program_counter+16'd4+
-										{memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
+				ret_val[32:24] = {1'b1,memory.flash[(temp_program_counter+16'd4+
+										{memory.flash[temp_program_counter+16'd2]
+										,memory.flash[temp_program_counter+16'd3]
 											})]};
-
-				ret_val[23:16] = {1'b1,memory.flash[(cpu_register.program_counter+16'd4+
-										{memory.flash[cpu_register.program_counter+16'd2]
-										,memory.flash[cpu_register.program_counter+16'd3]
+				trace_file_write(0,temp_program_counter+16'd2);
+				ret_val[23:16] = {1'b1,memory.flash[(temp_program_counter+16'd4+
+										{memory.flash[temp_program_counter+16'd2]
+										,memory.flash[temp_program_counter+16'd3]
 											})+16'd1]};
 
+				trace_file_write(0,(temp_program_counter+16'd4+
+										{memory.flash[temp_program_counter+16'd2]
+										,memory.flash[temp_program_counter+16'd3]
+											}));
 				addr_of_addr = ret_val[31:16];
 
 				ret_val[15:8] = memory.flash[addr_of_addr];
 
 				ret_val[7:0] = memory.flash[addr_of_addr+16'd1];
+				trace_file_write(0,addr_of_addr);
 			end
 			default:
 			begin
@@ -437,6 +453,7 @@ endfunction : single_operand_get
 //16 bit for source operand
 function automatic logic [50:0] double_operand_get(logic [2:0] s_reg_mode, logic [2:0] s_reg_number,logic [2:0] d_reg_mode, logic [2:0] d_reg_number, logic acc_type);
 	logic [50:0] ret_val = 0;
+	/*
 
 	logic [15:0] x_op_s = 0;
 	logic [15:0] addr_s = 0;
@@ -450,7 +467,7 @@ function automatic logic [50:0] double_operand_get(logic [2:0] s_reg_mode, logic
 	begin
 		//add by 6
 		ret_val[50:49] = 2'b10;
-		ret_val[48] = 1'b0;		
+		ret_val[48] = 1'b1;		
 		unique case (s_reg_mode)	//decode addressing mode
 
 			3'b010:
@@ -615,6 +632,23 @@ function automatic logic [50:0] double_operand_get(logic [2:0] s_reg_mode, logic
 				ret_val = 0;
 			end
 		endcase
+
+		unique case (d_reg_mode)	//decode addressing mode
+
+			3'b001:
+			begin
+
+				ret_val[47:32] = cpu_register.program_counter+16'd3;
+				ret_val[31:16] = cpu_register.program_counter[d_reg_number];
+			end
+
+			default:
+			begin
+				$display("SOMETHING IS WRONG=%d,%d",d_reg_mode,d_reg_number);
+				ret_val = 0;
+			end
+		endcase
+
 	end
 	else if((s_reg_number < 3'b110) && (d_reg_number == 3'b111))
 	begin
@@ -624,7 +658,7 @@ function automatic logic [50:0] double_operand_get(logic [2:0] s_reg_mode, logic
 	begin
 		//
 	end
-
+	*/
 	return ret_val;
 endfunction : double_operand_get
 
@@ -642,20 +676,20 @@ typedef enum {
 
 //call this initially
 //before execution of the program starts
-function automatic open_trace_file_to_write();
+function automatic void open_trace_file_to_write();
 	//every time at the beggining 
 	//it will flush the file
 	// fd_trace = $fopen(TRACE_FILE_OUT,"w");
 	fd_trace = $fopen("TraceFile.txt","w");
 endfunction : open_trace_file_to_write
 
-function automatic trace_file_write(logic [1:0] accessType, logic [15:0] memAddr);
+function automatic void trace_file_write(logic [1:0] accessType, logic [15:0] memAddr);
 	$fwrite(fd_trace, "%d \t %04o\n", accessType, memAddr);
 endfunction : trace_file_write
 
 //call this at the end
 //after execution of the program
-function automatic close_trace_file_to_write();
+function automatic void close_trace_file_to_write();
 	//will release the file
 	//necessary to avoid corruption
 	$fclose(fd_trace);
