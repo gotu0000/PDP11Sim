@@ -461,7 +461,7 @@ function automatic logic [50:0] double_operand_get(logic [2:0] s_reg_mode, logic
 	begin
 		ret_temp_1 = single_operand_get(s_reg_mode,s_reg_number,acc_type,cpu_register.program_counter);
 		ret_temp_2 = single_operand_get(d_reg_mode,d_reg_number,acc_type,cpu_register.program_counter+16'd2);
-		if((d_reg_mode > 3'b101)||(d_reg_number))
+		if((d_reg_mode > 3'b101)||(d_reg_number == 3'b111))
 		begin
 			//PC+6
 			ret_val[50:49] = 2'b10;
