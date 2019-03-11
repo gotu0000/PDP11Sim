@@ -129,23 +129,23 @@ typedef enum logic [9:0] {
 	,MFPS = 10'o1067	//
 }opcode_t_2;
 
-//all 10 bit, brnaching opcodes
-typedef enum logic [9:0] {
-	BR = 10'o0004 	//Branch always
-	,BNE = 10'o0010	//Branch if not equal
-	,BEQ = 10'o0014
-	,BGE = 10'o0020
-	,BLT = 10'o0024
-	,BGT = 10'o0030
-	,BLE = 10'o0034
-	,BPL = 10'o1000
-	,BMI = 10'o1004
-	,BHI = 10'o1010
-	,BLOS = 10'o1014
-	,BVC = 10'o1020
-	,BVS = 10'o1024
-	,BCC = 10'o1030
-	,BCS = 10'o1034
+//all 8 bit, brnaching opcodes
+typedef enum logic [7:0] {
+	BR = 8'b0_000_0001 	//Branch always
+	,BNE = 8'h02	//Branch if not equal
+	,BEQ = 8'h03
+	,BGE = 8'h04
+	,BLT = 8'h05
+	,BGT = 8'h06
+	,BLE = 8'h07
+	,BPL = 8'h80
+	,BMI = 8'h81
+	,BHI = 8'h82
+	,BLOS = 8'h83
+	,BVC = 8'h84
+	,BVS = 8'h85
+	,BCC = 8'h86
+	,BCS = 8'h87
 }opcode_t_3;
 
 //structure for double operand instructions type 1
@@ -175,7 +175,7 @@ typedef struct packed {
 //structure for conditional branch instructions
 typedef struct packed {
 	opcode_t_3 	opcode;	//hard coded bits + opcode
-	logic [5:0] offset;	//operand
+	logic [7:0] offset;	//operand
 }instruction_c_t;
 
 union packed {

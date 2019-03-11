@@ -40,11 +40,12 @@ logic [15:0] alu_out_lsb;
 //incase of branch store address over here
 logic [15:0] branch_addr;
 //calculate address from here
-logic [5:0] branch_addr_offset;
+logic [7:0] branch_addr_offset;
 //decide whether to take a branch or not
 logic branch_taken;
 instruction_type_t instruction_type;
 
+logic skipWrite = 1'b0;
 logic carry_buffer;
 int byte_op =0;
 
@@ -118,7 +119,7 @@ begin
 		begin
 			instruction.instruction_x = {memory.flash[cpu_register.program_counter]
 									, memory.flash[cpu_register.program_counter + 1'b1]};
-
+			trace_file_write(2,cpu_register.program_counter);
 		end
 
 		INSTRUCTION_DECODE:
@@ -659,6 +660,7 @@ begin
 						cpu_register.processor_status_word.overflow_flag = cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.carry_bit;
 					end
 
+
 					ROL:
 					begin
 						{cpu_register.processor_status_word.carry_bit,alu_out} = {source_operand[15:0],cpu_register.processor_status_word.carry_bit};
@@ -844,6 +846,9 @@ begin
 					end
 					CMP:
 					begin
+						skipWrite = 1'b1;
+						
+						$display("source_operand=%d,dest_operand=%d",source_operand,dest_operand);
 						{carry_buffer,alu_out} =  source_operand - dest_operand ;
 
 						// Overflow Flag : set if there was arithmetic overflow; that is,
@@ -870,6 +875,7 @@ begin
 					end
 					CMPB:
 					begin
+						skipWrite = 1'b1;
 						{carry_buffer,alu_out[7:0]} =  source_operand[7:0] - dest_operand[7:0] ;
 						//set Byte operation flag
 						byte_op = 1;
@@ -898,6 +904,7 @@ begin
 					end
 					BIT:
 					begin
+						skipWrite = 1'b1;
 						//overflow flag : clear
 						//Carry flag    : Not affected
 						alu_out =  source_operand & dest_operand ;
@@ -905,6 +912,7 @@ begin
 					end
 					BITB:
 					begin
+						skipWrite = 1'b1;
 						alu_out[7:0] =  source_operand[7:0] & dest_operand[7:0] ;
 						//overflow flag : clear
 						//Carry flag    : Not affected
@@ -1051,7 +1059,16 @@ begin
 					//TODO do this for all the instructions
 					BR:
 					begin
- 						branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+ 						if(branch_addr_offset[7] == 1'b1)
+ 						begin
+ 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+ 						end
+ 						else
+ 						begin
+ 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+ 							branch_addr = branch_addr + 16'd2;
+ 						end
+						$display("BR %d,%d",cpu_register.program_counter,branch_addr);
  						//always branch
  						branch_taken = 1'b1;
 					end
@@ -1060,7 +1077,15 @@ begin
 					begin
 						if(cpu_register.processor_status_word.zero_flag == 1'b0)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1072,7 +1097,15 @@ begin
 					begin
 						if(cpu_register.processor_status_word.zero_flag == 1'b1)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1084,7 +1117,15 @@ begin
 					begin
 						if((cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.overflow_flag) == 1'b0)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1096,7 +1137,15 @@ begin
 					begin
 						if((cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.overflow_flag) == 1'b1)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1108,7 +1157,15 @@ begin
 					begin
 						if((cpu_register.processor_status_word.zero_flag | (cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.overflow_flag)) == 1'b0)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1120,7 +1177,16 @@ begin
 					begin
 						if((cpu_register.processor_status_word.zero_flag | (cpu_register.processor_status_word.neg_value ^ cpu_register.processor_status_word.overflow_flag)) == 1'b1)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							// branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1132,7 +1198,15 @@ begin
 					begin
 						if(cpu_register.processor_status_word.neg_value == 1'b0)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1144,7 +1218,15 @@ begin
 					begin
 						if(cpu_register.processor_status_word.neg_value == 1'b1)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1157,7 +1239,15 @@ begin
 					begin
 						if((cpu_register.processor_status_word.carry_bit | cpu_register.processor_status_word.zero_flag) == 1'b0)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1169,7 +1259,15 @@ begin
 					begin
 						if((cpu_register.processor_status_word.carry_bit | cpu_register.processor_status_word.zero_flag) == 1'b1)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1181,7 +1279,15 @@ begin
 					begin
 						if(cpu_register.processor_status_word.overflow_flag == 1'b0)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1194,7 +1300,15 @@ begin
 					begin
 						if(cpu_register.processor_status_word.overflow_flag == 1'b1)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1206,7 +1320,15 @@ begin
 					begin
 						if(cpu_register.processor_status_word.carry_bit == 1'b0)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1219,7 +1341,15 @@ begin
 					begin
 						if(cpu_register.processor_status_word.carry_bit == 1'b1)
 						begin
-							branch_addr = cpu_register.program_counter + (2*branch_addr_offset);
+							if(branch_addr_offset[7] == 1'b1)
+	 						begin
+	 							branch_addr = cpu_register.program_counter - {8'b0,{~branch_addr_offset[6:0],1'b0}};
+	 						end
+	 						else
+	 						begin
+	 							branch_addr = cpu_register.program_counter + {8'b0,{branch_addr_offset[6:0],1'b0}};
+	 							branch_addr = branch_addr + 16'd2;
+	 						end
 							branch_taken = 1'b1;
 						end
 						else
@@ -1256,11 +1386,13 @@ begin
 					if(byte_word == 1'b1)
 					begin
 						memory.flash[dest_operand_addr] = alu_out[7:0];
+						trace_file_write(1,dest_operand_addr);
 					end
 					else
 					begin
 						memory.flash[dest_operand_addr] = alu_out[15:8];
 						memory.flash[dest_operand_addr+16'd1] = alu_out[7:0];
+						trace_file_write(1,dest_operand_addr);
 					end
 				end
 				if(pc_add == 1'b1)
@@ -1298,6 +1430,7 @@ begin
 					begin
 						memory.flash[dest_operand_addr] = alu_out[15:8];
 						memory.flash[dest_operand_addr+16'd1] = alu_out[7:0];
+						trace_file_write(1,dest_operand_addr);
 					end
 				end
 
@@ -1334,13 +1467,22 @@ begin
 				begin
 					if(byte_word == 1'b1)
 					begin
-						memory.flash[dest_operand_addr] = alu_out[7:0];
+						if(skipWrite == 1'b0)
+						begin
+							memory.flash[dest_operand_addr] = alu_out[7:0];
+							trace_file_write(1,dest_operand_addr);
+						end
 					end
 					else
 					begin
-						memory.flash[dest_operand_addr] = alu_out[15:8];
-						memory.flash[dest_operand_addr+16'd1] = alu_out[7:0];
+						if(skipWrite == 1'b0)
+						begin
+							memory.flash[dest_operand_addr] = alu_out[15:8];
+							memory.flash[dest_operand_addr+16'd1] = alu_out[7:0];
+							trace_file_write(1,dest_operand_addr);
+						end
 					end
+					skipWrite = 1'b0;
 				end
 
 				if(pc_add_db == 2'b00)
@@ -1364,6 +1506,7 @@ begin
 			begin
 				if(branch_taken == 1'b1)
 				begin
+					branch_taken = 1'b0;
 					cpu_register.program_counter = branch_addr;
 					$display("BT PC=%d",cpu_register.program_counter);
 				end

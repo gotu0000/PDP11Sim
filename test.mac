@@ -1,22 +1,20 @@
-A:	.WORD	5. ;
-B:	.WORD	5. 
-C:	.WORD	5.
-D:	.WORD   5.
-E:	.WORD   5.
-F:	.WORD   6.
-G:   .WORD  0.
-H:   .WORD  2.
-I:   .WORD  16.
+OLD:	.WORD	0.	;
+NEW:	.WORD	0.
+FIBO:	.WORD	0.
+N:		.WORD	6.
 
 START:
-CLR     A          ; Register mode
-CLR     (R1)        ; Register deferred - R1 contain add. of B
-CLR     (R2)+       ; Autoincrement - R2 contain add. of C
-CLR     @(R3)+      ; Autoincrement deferred -R3 contain add. of F and F cantain add. of C
-CLR     -(R4)       ; Autodecrement - R4 contain add. of D+2
-CLR     @-(R5)      ; Autodecrement deferred - R5 contain add of I and I contain add of H 
-CLR     2(R3)       ; Index - R3 contain add. of E-2 
-CLR     @0(R0)      ; Index deferred R0 cantain add. of G+0
-
+		MOV		#1.,OLD
+		MOV		#1.,FIBO
+WHILE:	CMP		N,#1.
+		BLE		WEND
+		MOV		FIBO,NEW
+		ADD		OLD,NEW
+		MOV		FIBO,OLD
+		MOV		NEW,FIBO
+		DEC		N
+		BR		WHILE
 WEND:
+		CLR FIBO
+		HALT
 		.END	START
